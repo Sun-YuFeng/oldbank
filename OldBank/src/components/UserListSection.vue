@@ -5,7 +5,7 @@
       <div class="list-header">
         <h3 class="list-title">用户列表</h3>
         <div class="list-info">
-          <span class="info-text">共 50 位用户，当前显示 1-10 位</span>
+          <span class="info-text">共 {{ totalUsers }} 位用户，当前显示 {{ startIndex }}-{{ endIndex }} 位</span>
         </div>
       </div>
 
@@ -23,7 +23,7 @@
             </tr>
           </thead>
           <tbody>
-            <tr v-for="user in users" :key="user.id" class="table-row">
+            <tr v-for="user in paginatedUsers" :key="user.id" class="table-row">
               <td class="user-name">{{ user.username }}</td>
               <td class="phone-number">{{ user.phone }}</td>
               <td class="user-role">{{ user.role }}</td>
@@ -43,6 +43,38 @@
             </tr>
           </tbody>
         </table>
+      </div>
+
+      <!-- 分页组件 -->
+      <div class="pagination-container">
+        <div class="pagination">
+          <button 
+            class="pagination-btn" 
+            :disabled="currentPage === 1"
+            @click="changePage(currentPage - 1)"
+          >
+            上一页
+          </button>
+          
+          <div class="page-numbers">
+            <button 
+              v-for="page in totalPages" 
+              :key="page"
+              :class="['page-btn', { active: page === currentPage }]"
+              @click="changePage(page)"
+            >
+              {{ page }}
+            </button>
+          </div>
+          
+          <button 
+            class="pagination-btn" 
+            :disabled="currentPage === totalPages"
+            @click="changePage(currentPage + 1)"
+          >
+            下一页
+          </button>
+        </div>
       </div>
     </div>
   </div>
@@ -134,8 +166,111 @@ export default {
           credit: 618,
           status: '待审核',
           registerTime: '2025-08-06'
+        },
+        {
+          id: 10,
+          username: 'user10',
+          phone: '13812345678',
+          role: '志愿者',
+          credit: 450,
+          status: '活跃',
+          registerTime: '2025-08-15'
+        },
+        {
+          id: 11,
+          username: 'user11',
+          phone: '13823456789',
+          role: '需求者',
+          credit: 320,
+          status: '活跃',
+          registerTime: '2025-08-20'
+        },
+        {
+          id: 12,
+          username: 'user12',
+          phone: '13834567890',
+          role: '志愿者',
+          credit: 780,
+          status: '禁用',
+          registerTime: '2025-08-12'
+        },
+        {
+          id: 13,
+          username: 'user13',
+          phone: '13845678901',
+          role: '管理员',
+          credit: 920,
+          status: '活跃',
+          registerTime: '2025-08-08'
+        },
+        {
+          id: 14,
+          username: 'user14',
+          phone: '13856789012',
+          role: '志愿者',
+          credit: 550,
+          status: '待审核',
+          registerTime: '2025-08-25'
+        },
+        {
+          id: 15,
+          username: 'user15',
+          phone: '13867890123',
+          role: '需求者',
+          credit: 410,
+          status: '活跃',
+          registerTime: '2025-08-18'
+        },
+        {
+          id: 16,
+          username: 'user16',
+          phone: '13878901234',
+          role: '志愿者',
+          credit: 680,
+          status: '待审核',
+          registerTime: '2025-08-22'
+        },
+        {
+          id: 17,
+          username: 'user17',
+          phone: '13889012345',
+          role: '管理员',
+          credit: 830,
+          status: '活跃',
+          registerTime: '2025-08-14'
+        },
+        {
+          id: 18,
+          username: 'user18',
+          phone: '13890123456',
+          role: '需求者',
+          credit: 290,
+          status: '禁用',
+          registerTime: '2025-08-07'
         }
-      ]
+      ],
+      currentPage: 1,
+      pageSize: 9
+    }
+  },
+  computed: {
+    totalUsers() {
+      return this.users.length
+    },
+    totalPages() {
+      return Math.ceil(this.totalUsers / this.pageSize)
+    },
+    paginatedUsers() {
+      const startIndex = (this.currentPage - 1) * this.pageSize
+      const endIndex = startIndex + this.pageSize
+      return this.users.slice(startIndex, endIndex)
+    },
+    startIndex() {
+      return (this.currentPage - 1) * this.pageSize + 1
+    },
+    endIndex() {
+      const end = this.currentPage * this.pageSize
+      return end > this.totalUsers ? this.totalUsers : end
     }
   },
   methods: {
@@ -146,6 +281,11 @@ export default {
         '待审核': 'status-pending'
       }
       return statusMap[status] || 'status-default'
+    },
+    changePage(page) {
+      if (page >= 1 && page <= this.totalPages) {
+        this.currentPage = page
+      }
     }
   }
 }
@@ -293,6 +433,70 @@ export default {
   background-color: #dc2626;
 }
 
+/* 分页样式 */
+.pagination-container {
+  padding: 20px 24px;
+  border-top: 1px solid #e2e8f0;
+  display: flex;
+  justify-content: center;
+}
+
+.pagination {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.pagination-btn {
+  padding: 8px 16px;
+  border: 1px solid #d1d5db;
+  background: white;
+  border-radius: 6px;
+  font-size: 14px;
+  color: #374151;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.pagination-btn:hover:not(:disabled) {
+  background: #f3f4f6;
+  border-color: #9ca3af;
+}
+
+.pagination-btn:disabled {
+  color: #9ca3af;
+  cursor: not-allowed;
+  background: #f9fafb;
+}
+
+.page-numbers {
+  display: flex;
+  gap: 4px;
+}
+
+.page-btn {
+  padding: 8px 12px;
+  border: 1px solid #d1d5db;
+  background: white;
+  border-radius: 6px;
+  font-size: 14px;
+  color: #374151;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  min-width: 40px;
+}
+
+.page-btn:hover {
+  background: #f3f4f6;
+  border-color: #9ca3af;
+}
+
+.page-btn.active {
+  background: #3b82f6;
+  border-color: #3b82f6;
+  color: white;
+}
+
 @media (max-width: 768px) {
   .list-header {
     flex-direction: column;
@@ -312,6 +516,19 @@ export default {
   .actions {
     flex-direction: column;
     gap: 4px;
+  }
+  
+  .pagination {
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 4px;
+  }
+  
+  .page-numbers {
+    order: -1;
+    width: 100%;
+    justify-content: center;
+    margin-bottom: 8px;
   }
 }
 </style>

@@ -44,6 +44,24 @@ const router = createRouter({
       name: 'SystemSettings',
       // 懒加载系统设置页面
       component: () => import('../views/SystemSettingsPage.vue'),
+    },
+    {
+      path: '/complaint-management',
+      name: 'ComplaintManagement',
+      // 懒加载投诉管理页面
+      component: () => import('../views/ComplaintManagementPage.vue'),
+    },
+    {
+      path: '/complaint-management/:id',
+      name: 'ComplaintDetail',
+      // 懒加载投诉详情页面
+      component: () => import('../views/ComplaintDetailPage.vue'),
+    },
+    {
+      path: '/account-management',
+      name: 'AccountManagement',
+      // 懒加载账号管理页面
+      component: () => import('../views/AccountManagementPage.vue'),
     }
   ],
 })

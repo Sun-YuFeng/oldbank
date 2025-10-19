@@ -26,6 +26,16 @@
           </router-link>
         </li>
         <li>
+          <router-link to="/complaint-management" class="nav-item" active-class="active">
+            <span>投诉处理</span>
+          </router-link>
+        </li>
+        <li>
+          <router-link to="/account-management" class="nav-item" active-class="active">
+            <span>账号管理</span>
+          </router-link>
+        </li>
+        <li>
           <router-link to="/system-settings" class="nav-item" active-class="active">
             <span>系统设置</span>
           </router-link>

@@ -2,9 +2,9 @@
   <div class="analytics-container">
     <div class="charts-wrapper">
       <div class="chart-box">
-        <h3>积分分布</h3>
+        <h3>需求统计</h3>
         <div class="chart-content">
-          <canvas ref="barChart"></canvas>
+          <canvas ref="demandChart"></canvas>
         </div>
       </div>
       <div class="chart-box">
@@ -21,20 +21,31 @@
 import { ref, onMounted } from 'vue'
 import Chart from 'chart.js/auto'
 
-const barChart = ref(null)
+const demandChart = ref(null)
 const pieChart = ref(null)
 
 onMounted(() => {
-  // 积分分布柱状图
-  new Chart(barChart.value.getContext('2d'), {
+  // 获取最近四天的日期
+  const getRecentDates = () => {
+    const dates = []
+    for (let i = 3; i >= 0; i--) {
+      const date = new Date()
+      date.setDate(date.getDate() - i)
+      dates.push(date.toLocaleDateString('zh-CN', { month: '2-digit', day: '2-digit' }))
+    }
+    return dates
+  }
+
+  // 需求统计柱状图 - 最近四天每日需求量
+  new Chart(demandChart.value.getContext('2d'), {
     type: 'bar',
     data: {
-      labels: ['0-300', '300-600', '600-900', '900+'],
+      labels: getRecentDates(),
       datasets: [{
-        label: '用户数量',
-        data: [25, 42, 18, 15],
-        backgroundColor: 'rgba(142, 68, 173, 0.7)',
-        borderColor: 'rgba(142, 68, 173, 1)',
+        label: '需求量',
+        data: [45, 38, 52, 41], // 最近四天的需求量数据
+        backgroundColor: 'rgba(52, 152, 219, 0.7)',
+        borderColor: 'rgba(52, 152, 219, 1)',
         borderWidth: 1
       }]
     },
@@ -43,12 +54,27 @@ onMounted(() => {
       maintainAspectRatio: false,
       scales: {
         y: {
-          beginAtZero: true
+          beginAtZero: true,
+          title: {
+            display: true,
+            text: '需求量'
+          }
+        },
+        x: {
+          title: {
+            display: true,
+            text: '日期'
+          }
         }
       },
       plugins: {
         legend: {
-          display: false
+          display: true,
+          position: 'top'
+        },
+        title: {
+          display: true,
+          text: '最近四天每日需求量统计'
         }
       }
     }

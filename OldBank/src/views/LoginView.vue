@@ -98,9 +98,9 @@ export default {
         return
       }
       
-      // 这里应该调用登录API
+      // 临时绕过API验证，直接跳转到主页面
+      // TODO: 后续需要调用登录API进行验证
       console.log('登录信息:', this.loginForm)
-      // 登录成功后跳转到主页面
       this.$router.push('/')
     },
     goToRegister() {
