@@ -34,6 +34,12 @@ export default {
     if (this.$route.path === '/') {
       this.$router.push('/login')
     }
+  },
+  created() {
+    // 确保在Netlify上路由正常工作
+    if (window.location.pathname !== '/' && !window.location.pathname.startsWith('/login') && !window.location.pathname.startsWith('/register')) {
+      this.$router.push(window.location.pathname)
+    }
   }
 };
 </script>
