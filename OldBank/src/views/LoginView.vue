@@ -51,9 +51,11 @@
         <button 
           type="submit" 
           class="login-button"
-          :disabled="!loginForm.agreed"
-          :class="{ 'login-button-disabled': !loginForm.agreed }"
-        >登录</button>
+          :disabled="!loginForm.agreed || loading"
+          :class="{ 'login-button-disabled': !loginForm.agreed || loading }"
+        >
+          {{ loading ? '登录中...' : '登录' }}
+        </button>
       </form>
       
       <!-- 协议弹窗 -->
@@ -77,6 +79,8 @@
 </template>
 
 <script>
+import { login } from '@/utils/api'
+
 export default {
   name: 'LoginView',
   data() {
@@ -88,20 +92,44 @@ export default {
       },
       showModal: false,
       modalTitle: '',
-      modalContent: ''
+      modalContent: '',
+      loading: false
     }
   },
   methods: {
-    handleLogin() {
+    async handleLogin() {
       if (!this.loginForm.agreed) {
         alert('请先阅读并同意用户协议和隐私政策')
         return
       }
       
-      // 临时绕过API验证，直接跳转到主页面
-      // TODO: 后续需要调用登录API进行验证
-      console.log('登录信息:', this.loginForm)
-      this.$router.push('/')
+      if (!this.loginForm.username || !this.loginForm.password) {
+        alert('请输入账号和密码')
+        return
+      }
+      
+      this.loading = true
+      
+      try {
+        // 调用登录API
+        const response = await login(this.loginForm.username, this.loginForm.password)
+        
+        if (response.code === 200) {
+          // 登录成功，保存token和用户信息
+          localStorage.setItem('adminToken', response.data.token)
+          localStorage.setItem('adminInfo', JSON.stringify(response.data))
+          
+          // 跳转到主页面
+          this.$router.push('/')
+        } else {
+          alert(response.message || '登录失败')
+        }
+      } catch (error) {
+        console.error('登录失败:', error)
+        alert(error.message || '登录失败，请检查网络连接')
+      } finally {
+        this.loading = false
+      }
     },
     goToRegister() {
       this.$router.push('/register')

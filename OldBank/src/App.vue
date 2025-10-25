@@ -30,9 +30,19 @@ export default {
     }
   },
   mounted() {
-    // 默认跳转到登录页面
-    if (this.$route.path === '/') {
-      this.$router.push('/login')
+    // 检查登录状态
+    const token = localStorage.getItem('adminToken')
+    
+    if (this.$route.path === '/login' || this.$route.path === '/register') {
+      // 如果在登录/注册页面且有token，跳转到首页
+      if (token) {
+        this.$router.push('/')
+      }
+    } else {
+      // 如果在其他页面且没有token，跳转到登录页
+      if (!token) {
+        this.$router.push('/login')
+      }
     }
   },
   created() {

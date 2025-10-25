@@ -15,10 +15,14 @@ export default defineConfig({
       '@': fileURLToPath(new URL('./src', import.meta.url))
     },
   },
-  base: '/', // 确保基础路径正确
-  build: {
-    outDir: 'dist',
-    assetsDir: 'assets',
-    sourcemap: false
+  server: {
+    proxy: {
+      '/api': {
+        target: 'http://192.168.38.39:8080/silveragepass',
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/api/, '')
+      }
+    }
   }
 })
+

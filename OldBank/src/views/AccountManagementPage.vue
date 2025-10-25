@@ -28,34 +28,38 @@
           </div>
         </div>
         <div class="account-list">
+          <div v-if="loading" class="loading-text">加载中...</div>
+          <div v-else-if="filteredPendingAccounts.length === 0" class="empty-text">暂无待审核账号</div>
           <div 
-            v-for="account in pendingAccounts" 
+            v-else
+            v-for="account in filteredPendingAccounts" 
             :key="account.id"
             class="account-card"
           >
             <div class="account-info">
               <div class="account-avatar">
-                <img :src="account.avatar" :alt="account.username" />
+                <div class="avatar-placeholder">{{ account.username.charAt(0) }}</div>
               </div>
               <div class="account-details">
                 <h4 class="account-name">{{ account.username }}</h4>
                 <p class="account-phone">电话：{{ account.phone }}</p>
-                <p class="account-username">账号：{{ account.username }}</p>
-                <p class="account-register-time">注册时间：{{ account.registerTime }}</p>
+                <p class="account-level">申请级别：{{ account.adminLevelDesc }}</p>
+                <p class="account-register-time">注册时间：{{ account.createTime }}</p>
+                <p class="account-status">状态：{{ account.approvalStatusText }}</p>
               </div>
             </div>
             <div class="account-actions">
               <button 
                 class="action-btn approve-btn"
                 @click="approveAccount(account.id)"
-                :disabled="!isAdmin"
+                :disabled="!canApproveAccounts"
               >
                 通过
               </button>
               <button 
                 class="action-btn reject-btn"
                 @click="rejectAccount(account.id)"
-                :disabled="!isAdmin"
+                :disabled="!canApproveAccounts"
               >
                 拒绝
               </button>
@@ -81,38 +85,40 @@
           </div>
         </div>
         <div class="account-list">
+          <div v-if="loading" class="loading-text">加载中...</div>
+          <div v-else-if="filteredActiveAccounts.length === 0" class="empty-text">暂无已激活账号</div>
           <div 
-            v-for="account in activeAccounts" 
+            v-else
+            v-for="account in filteredActiveAccounts" 
             :key="account.id"
             class="account-card"
           >
             <div class="account-info">
               <div class="account-avatar">
-                <img :src="account.avatar" :alt="account.username" />
+                <div class="avatar-placeholder">{{ account.username.charAt(0) }}</div>
               </div>
               <div class="account-details">
                 <h4 class="account-name">{{ account.username }}</h4>
                 <p class="account-phone">电话：{{ account.phone }}</p>
-                <p class="account-email">邮箱：{{ account.email }}</p>
-                <p class="account-status">
-                  <span class="status-badge" :class="account.status">{{ account.statusText }}</span>
-                </p>
+                <p class="account-level">级别：{{ account.adminLevelDesc }}</p>
+                <p class="account-status">状态：{{ account.approvalStatusText }}</p>
+                <p class="account-register-time">注册时间：{{ account.createTime }}</p>
               </div>
             </div>
             <div class="account-actions">
               <select 
-                v-model="account.role" 
+                v-model="account.adminLevel" 
                 class="role-select"
-                @change="updateRole(account.id, account.role)"
-                :disabled="!isAdmin"
+                @change="updateRole(account.id, account.adminLevel)"
+                :disabled="!canModifyPermissions || account.adminLevel === 'SUPER_ADMIN'"
               >
-                <option value="member">成员</option>
-                <option value="admin">管理者</option>
+                <option value="JUNIOR_ADMIN">初级管理员</option>
+                <option value="SENIOR_ADMIN">高级管理员</option>
               </select>
               <button 
                 class="action-btn delete-btn"
                 @click="deleteAccount(account.id)"
-                :disabled="!isAdmin"
+                :disabled="!canDeleteAccounts || account.adminLevel === 'SUPER_ADMIN'"
               >
                 删除
               </button>
@@ -125,122 +131,151 @@
 </template>
 
 <script>
+import { getPendingAccounts, getAllAccounts, approveAccount } from '@/utils/api'
+
 export default {
   name: 'AccountManagementPage',
   data() {
     return {
       searchKeyword: '',
-      isAdmin: true, // 开发过程默认是管理者模式
-      pendingAccounts: [
-        {
-          id: 1,
-          username: '张大爷',
-          phone: '13800138001',
-          email: 'zhang@example.com',
-          registerTime: '2025-08-20 14:30',
-          avatar: '/src/assets/background.png'
-        },
-        {
-          id: 2,
-          username: '李阿姨',
-          phone: '13800138002',
-          email: 'li@example.com',
-          registerTime: '2025-08-19 09:15',
-          avatar: '/src/assets/background.png'
-        },
-        {
-          id: 3,
-          username: '王叔叔',
-          phone: '13800138003',
-          email: 'wang@example.com',
-          registerTime: '2025-08-18 16:45',
-          avatar: '/src/assets/background.png'
-        }
-      ],
-      activeAccounts: [
-        {
-          id: 101,
-          username: '管理员',
-          phone: '13800138101',
-          email: 'admin@example.com',
-          role: 'admin',
-          status: 'active',
-          statusText: '已激活',
-          avatar: '/src/assets/background.png'
-        },
-        {
-          id: 102,
-          username: '志愿者1',
-          phone: '13800138102',
-          email: 'volunteer1@example.com',
-          role: 'member',
-          status: 'active',
-          statusText: '已激活',
-          avatar: '/src/assets/background.png'
-        },
-        {
-          id: 103,
-          username: '志愿者2',
-          phone: '13800138103',
-          email: 'volunteer2@example.com',
-          role: 'member',
-          status: 'active',
-          statusText: '已激活',
-          avatar: '/src/assets/background.png'
-        },
-        {
-          id: 104,
-          username: '志愿者3',
-          phone: '13800138104',
-          email: 'volunteer3@example.com',
-          role: 'member',
-          status: 'inactive',
-          statusText: '未激活',
-          avatar: '/src/assets/background.png'
-        }
-      ]
+      currentUserLevel: 'SUPER_ADMIN', // 当前登录用户权限级别
+      loading: false,
+      pendingAccounts: [],
+      activeAccounts: []
     }
   },
+  mounted() {
+    this.loadAccounts()
+  },
   computed: {
+    // 权限检查计算属性
+    isSuperAdmin() {
+      return this.currentUserLevel === 'SUPER_ADMIN'
+    },
+    isSeniorAdmin() {
+      return this.currentUserLevel === 'SENIOR_ADMIN'
+    },
+    isJuniorAdmin() {
+      return this.currentUserLevel === 'JUNIOR_ADMIN'
+    },
+    canApproveAccounts() {
+      // 只有高级管理员和最高权限管理员可以审核账号
+      return this.isSuperAdmin || this.isSeniorAdmin
+    },
+    canModifyPermissions() {
+      // 只有高级管理员可以修改权限（最高权限管理员不能修改自己）
+      return this.isSeniorAdmin
+    },
+    canDeleteAccounts() {
+      // 只有高级管理员可以删除账号（最高权限管理员不能被删除）
+      return this.isSeniorAdmin
+    },
+    
+    // 过滤后的账号列表
     filteredPendingAccounts() {
       if (!this.searchKeyword) return this.pendingAccounts
       const keyword = this.searchKeyword.toLowerCase()
       return this.pendingAccounts.filter(account => 
         account.username.toLowerCase().includes(keyword) ||
-        account.phone.includes(keyword) ||
-        account.email.toLowerCase().includes(keyword)
+        account.phone.includes(keyword)
       )
     },
     filteredActiveAccounts() {
-      if (!this.searchKeyword) return this.activeAccounts
+      // 权限设置区域只显示已审核通过的账号
+      const approvedAccounts = this.activeAccounts.filter(account => 
+        account.approvalStatus === 1 // 审核状态为1表示已通过
+      )
+      
+      if (!this.searchKeyword) return approvedAccounts
       const keyword = this.searchKeyword.toLowerCase()
-      return this.activeAccounts.filter(account => 
+      return approvedAccounts.filter(account => 
         account.username.toLowerCase().includes(keyword) ||
-        account.phone.includes(keyword) ||
-        account.email.toLowerCase().includes(keyword)
+        account.phone.includes(keyword)
       )
     }
   },
   methods: {
-    approveAccount(id) {
-      if (!this.isAdmin) return
-      console.log('通过账号:', id)
-      // 这里调用API审核通过账号
+    async loadAccounts() {
+      this.loading = true
+      try {
+        // 获取待审核账号列表
+        const pendingResponse = await getPendingAccounts()
+        if (pendingResponse.code === 200) {
+          this.pendingAccounts = pendingResponse.data || []
+        }
+        
+        // 获取所有账号列表
+        const allResponse = await getAllAccounts()
+        if (allResponse.code === 200) {
+          this.activeAccounts = allResponse.data || []
+        }
+      } catch (error) {
+        console.error('加载账号列表失败:', error)
+        alert('加载账号列表失败，请检查网络连接')
+      } finally {
+        this.loading = false
+      }
     },
-    rejectAccount(id) {
-      if (!this.isAdmin) return
-      console.log('拒绝账号:', id)
-      // 这里调用API拒绝账号
+    
+    async approveAccount(id) {
+      if (!this.canApproveAccounts) return
+      
+      // 让用户选择审核通过的权限级别
+      const adminLevel = this.isSuperAdmin ? 'SENIOR_ADMIN' : 'JUNIOR_ADMIN'
+      
+      if (confirm(`确定要通过此账号的审核吗？审核级别：${adminLevel === 'SENIOR_ADMIN' ? '高级管理员' : '初级管理员'}`)) {
+        try {
+          const response = await approveAccount(id, 1, '审核通过', adminLevel)
+          if (response.code === 200) {
+            alert('审核通过成功')
+            // 重新加载账号列表
+            this.loadAccounts()
+          } else {
+            alert(response.message || '审核失败')
+          }
+        } catch (error) {
+          console.error('审核失败:', error)
+          alert(error.message || '审核失败，请检查网络连接')
+        }
+      }
     },
-    updateRole(id, role) {
-      if (!this.isAdmin) return
-      console.log('更新账号权限:', id, role)
+    
+    async rejectAccount(id) {
+      if (!this.canApproveAccounts) return
+      
+      const remark = prompt('请输入拒绝原因：')
+      if (remark === null) return
+      
+      try {
+        const response = await approveAccount(id, 2, remark || '审核拒绝')
+        if (response.code === 200) {
+          alert('审核拒绝成功')
+          // 重新加载账号列表
+          this.loadAccounts()
+        } else {
+          alert(response.message || '审核失败')
+        }
+      } catch (error) {
+        console.error('审核失败:', error)
+        alert(error.message || '审核失败，请检查网络连接')
+      }
+    },
+    
+    updateRole(id, adminLevel) {
+      if (!this.canModifyPermissions) return
+      console.log('更新账号权限:', id, adminLevel)
       // 这里调用API更新账号角色
+      alert(`账号权限已更新为：${adminLevel === 'SENIOR_ADMIN' ? '高级管理员' : '初级管理员'}`)
     },
+    
     deleteAccount(id) {
-      if (!this.isAdmin) return
-      console.log('删除账号:', id)
-      // 这里调用API删除账号
+      if (!this.canDeleteAccounts) return
+      
+      if (confirm('确定要删除此账号吗？此操作不可恢复。')) {
+        console.log('删除账号:', id)
+        // 这里调用API删除账号
+        alert('账号删除成功')
+      }
     }
   }
 }

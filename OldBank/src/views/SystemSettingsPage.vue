@@ -21,13 +21,17 @@
       <div class="info-item">
         <label class="info-label">密码：</label>
         <span class="info-value">********</span>
-        <button class="change-password-btn">修改密码</button>
+        <span class="password-hint">密码不可修改</span>
       </div>
       <div class="info-item">
         <label class="info-label">用户身份：</label>
         <span class="info-value">
-          <span class="role-badge" :class="accountInfo.role">{{ accountInfo.roleText }}</span>
+          <span class="role-badge" :class="getRoleClass(accountInfo.adminLevel)">{{ accountInfo.adminLevelDesc || '未知' }}</span>
         </span>
+      </div>
+      <div class="info-item">
+        <label class="info-label">审核状态：</label>
+        <span class="info-value">{{ accountInfo.approvalStatusText || '未知' }}</span>
       </div>
     </div>
     
@@ -38,24 +42,70 @@
 </template>
 
 <script>
+import { logout, getCurrentAdmin } from '@/utils/api'
+
 export default {
   name: 'SystemSettingsPage',
   data() {
     return {
       accountInfo: {
-        username: 'admin',
-        phone: '13800138000',
-        role: 'admin', // admin: 管理者, member: 普通成员
-        roleText: '管理者'
+        username: '',
+        phone: '',
+        adminLevel: '',
+        adminLevelDesc: '',
+        approvalStatus: '',
+        approvalStatusText: ''
       }
     }
   },
+  async mounted() {
+    await this.fetchCurrentAdminInfo()
+  },
   methods: {
-    handleLogout() {
+    async fetchCurrentAdminInfo() {
+      try {
+        const response = await getCurrentAdmin()
+        if (response.code === 200) {
+          this.accountInfo = response.data
+        }
+      } catch (error) {
+        console.error('获取管理员信息失败:', error)
+        // 如果API调用失败，使用本地存储的信息作为备用
+        const adminInfo = localStorage.getItem('adminInfo')
+        if (adminInfo) {
+          this.accountInfo = JSON.parse(adminInfo)
+        }
+      }
+    },
+    
+    async handleLogout() {
       if (confirm('确定要退出登录吗？')) {
-        console.log('执行退出登录逻辑')
-        // 这里调用退出登录API
-        this.$router.push('/login')
+        try {
+          // 调用退出登录API
+          await logout()
+        } catch (error) {
+          console.error('退出登录失败:', error)
+        } finally {
+          // 清除本地存储的token和用户信息
+          localStorage.removeItem('adminToken')
+          localStorage.removeItem('adminInfo')
+          
+          // 跳转到登录页
+          this.$router.push('/login')
+        }
+      }
+    },
+    
+    getRoleClass(adminLevel) {
+      switch (adminLevel) {
+        case 'SUPER_ADMIN':
+          return 'super-admin'
+        case 'SENIOR_ADMIN':
+          return 'senior-admin'
+        case 'JUNIOR_ADMIN':
+          return 'junior-admin'
+        default:
+          return 'unknown'
       }
     }
   }
@@ -149,6 +199,114 @@ h1 {
 .role-badge.member {
   background: #f0f9ff;
   color: #0369a1;
+}
+
+.role-badge.super-admin {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+.role-badge.senior-admin {
+  background: #dbeafe;
+  color: #1e40af;
+}
+
+.role-badge.junior-admin {
+  background: #f0f9ff;
+  color: #0369a1;
+}
+
+.role-badge.unknown {
+  background: #f3f4f6;
+  color: #6b7280;
+}
+
+.password-hint {
+  margin-left: 12px;
+  color: #6b7280;
+  font-size: 12px;
+  font-style: italic;
+}
+
+.role-badge.super-admin {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+.role-badge.senior-admin {
+  background: #dbeafe;
+  color: #1e40af;
+}
+
+.role-badge.junior-admin {
+  background: #f0f9ff;
+  color: #0369a1;
+}
+
+.role-badge.unknown {
+  background: #f3f4f6;
+  color: #6b7280;
+}
+
+.password-hint {
+  margin-left: 12px;
+  color: #6b7280;
+  font-size: 12px;
+  font-style: italic;
+}
+
+.role-badge.super-admin {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+.role-badge.senior-admin {
+  background: #dbeafe;
+  color: #1e40af;
+}
+
+.role-badge.junior-admin {
+  background: #f0f9ff;
+  color: #0369a1;
+}
+
+.role-badge.unknown {
+  background: #f3f4f6;
+  color: #6b7280;
+}
+
+.password-hint {
+  margin-left: 12px;
+  color: #6b7280;
+  font-size: 12px;
+  font-style: italic;
+}
+
+.role-badge.super-admin {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+.role-badge.senior-admin {
+  background: #dbeafe;
+  color: #1e40af;
+}
+
+.role-badge.junior-admin {
+  background: #f0f9ff;
+  color: #0369a1;
+}
+
+.role-badge.unknown {
+  background: #f3f4f6;
+  color: #6b7280;
+}
+
+.password-hint {
+  margin-left: 12px;
+  color: #6b7280;
+  font-size: 12px;
+  font-style: italic;
 }
 
 .change-password-btn {
