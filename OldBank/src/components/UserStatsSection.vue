@@ -5,25 +5,15 @@
       <div class="chart-card">
         <h3 class="chart-title">用户角色分布</h3>
         <div class="chart-content">
-          <!-- Fixed Y-axis positioning and layout -->
-          <div class="y-axis">
-            <span class="y-axis-label" v-for="value in roleYAxisLabels" :key="value">{{ value }}</span>
+          <div v-if="roleLoading" class="loading-container">
+            <div class="loading-spinner"></div>
+            <span>加载中...</span>
           </div>
-          <div class="chart-wrapper">
-            <div class="bar-chart">
-              <div class="bar-item" v-for="item in roleData" :key="item.label">
-                <div class="bar-wrapper">
-                  <div 
-                    class="bar role-bar" 
-                    :style="{ height: (item.value / maxRoleValue * 100) + '%' }"
-                    @mouseenter="showTooltip($event, item.value)"
-                    @mouseleave="hideTooltip"
-                  ></div>
-                </div>
-                <span class="bar-label">{{ item.label }}</span>
-              </div>
-            </div>
+          <div v-else-if="roleError" class="error-container">
+            <span class="error-text">{{ roleError }}</span>
+            <button @click="loadRoleStats" class="retry-btn">重试</button>
           </div>
+          <div v-else ref="roleChart" class="echart-container"></div>
         </div>
       </div>
 
@@ -31,86 +21,326 @@
       <div class="chart-card">
         <h3 class="chart-title">用户状态分布</h3>
         <div class="chart-content">
-          <!-- Fixed Y-axis positioning and layout -->
-          <div class="y-axis">
-            <span class="y-axis-label" v-for="value in statusYAxisLabels" :key="value">{{ value }}</span>
+          <div v-if="statusLoading" class="loading-container">
+            <div class="loading-spinner"></div>
+            <span>加载中...</span>
           </div>
-          <div class="chart-wrapper">
-            <div class="bar-chart">
-              <div class="bar-item" v-for="item in statusData" :key="item.label">
-                <div class="bar-wrapper">
-                  <div 
-                    class="bar status-bar" 
-                    :style="{ height: (item.value / maxStatusValue * 100) + '%' }"
-                    @mouseenter="showTooltip($event, item.value)"
-                    @mouseleave="hideTooltip"
-                  ></div>
-                </div>
-                <span class="bar-label">{{ item.label }}</span>
-              </div>
-            </div>
+          <div v-else-if="statusError" class="error-container">
+            <span class="error-text">{{ statusError }}</span>
+            <button @click="loadStatusStats" class="retry-btn">重试</button>
           </div>
+          <div v-else ref="statusChart" class="echart-container"></div>
         </div>
       </div>
-    </div>
-    
-    <!-- Tooltip remains unchanged -->
-    <div 
-      v-if="tooltip.show" 
-      class="tooltip" 
-      :style="{ left: tooltip.x + 'px', top: tooltip.y + 'px' }"
-    >
-      {{ tooltip.value }}
     </div>
   </div>
 </template>
 
 <script>
+import * as echarts from 'echarts'
+import { getRoleStats, getStatusStats } from '../utils/api'
+
 export default {
   name: 'UserStatsSection',
   data() {
     return {
-      roleData: [
-        { label: '需求者', value: 20 },
-        { label: '志愿者', value: 14 },
-        { label: '管理员', value: 16 }
-      ],
-      statusData: [
-        { label: '活跃', value: 22 },
-        { label: '禁用', value: 13 },
-        { label: '待审核', value: 16 }
-      ],
-      tooltip: {
-        show: false,
-        x: 0,
-        y: 0,
-        value: 0
-      }
+      roleData: [],
+      statusData: [],
+      roleChart: null,
+      statusChart: null,
+      roleLoading: false,
+      statusLoading: false,
+      roleError: '',
+      statusError: ''
     }
   },
-  computed: {
-    maxRoleValue() {
-      return Math.max(...this.roleData.map(item => item.value))
-    },
-    maxStatusValue() {
-      return Math.max(...this.statusData.map(item => item.value))
-    },
-    roleYAxisLabels() {
-      return [20, 15, 10, 5, 0]
-    },
-    statusYAxisLabels() {
-      return [24, 18, 12, 6, 0]
+  mounted() {
+    console.log('UserStatsSection组件已挂载，开始加载数据...')
+    console.log('当前环境:', import.meta.env.MODE)
+    console.log('API基础URL:', import.meta.env.VITE_API_BASE_URL || '使用相对路径')
+    
+    this.loadRoleStats()
+    this.loadStatusStats()
+  },
+  beforeUnmount() {
+    if (this.roleChart) {
+      window.removeEventListener('resize', this.handleRoleChartResize)
+      this.roleChart.dispose()
+    }
+    if (this.statusChart) {
+      window.removeEventListener('resize', this.handleStatusChartResize)
+      this.statusChart.dispose()
     }
   },
   methods: {
-    showTooltip(event, value) {
-      this.tooltip.show = true
-      this.tooltip.value = value
-      this.tooltip.x = event.clientX + 10
-      this.tooltip.y = event.clientY - 30
+    async loadRoleStats() {
+      this.roleLoading = true
+      this.roleError = ''
+      
+      try {
+        console.log('开始获取角色统计数据...')
+        const response = await getRoleStats()
+        console.log('角色统计API响应:', response)
+        
+        if (response.code === 200) {
+          console.log('角色统计数据:', response.data)
+          
+          // 确保数据始终是数组格式
+          this.roleData = Array.isArray(response.data) ? response.data : [response.data]
+          
+          console.log('处理后的角色数据:', this.roleData)
+          
+          // 数据加载完成后初始化图表
+          this.$nextTick(() => {
+            this.initRoleChart()
+          })
+        } else {
+          console.error('角色统计API返回错误:', response)
+          this.roleError = response.message || '获取角色统计数据失败'
+        }
+      } catch (error) {
+        console.error('获取角色统计数据失败:', error)
+        this.roleError = error.message || '网络错误，请检查连接'
+      } finally {
+        this.roleLoading = false
+      }
     },
-    hideTooltip() {
-      this.tooltip.show = false
+    
+    async loadStatusStats() {
+      this.statusLoading = true
+      this.statusError = ''
+      
+      try {
+        console.log('开始获取状态统计数据...')
+        const response = await getStatusStats()
+        console.log('状态统计API响应:', response)
+        
+        if (response.code === 200) {
+          console.log('状态统计数据:', response.data)
+          
+          // 确保数据始终是数组格式
+          this.statusData = Array.isArray(response.data) ? response.data : [response.data]
+          
+          console.log('处理后的状态数据:', this.statusData)
+          
+          // 数据加载完成后初始化图表
+          this.$nextTick(() => {
+            this.initStatusChart()
+          })
+        } else {
+          console.error('状态统计API返回错误:', response)
+          this.statusError = response.message || '获取状态统计数据失败'
+        }
+      } catch (error) {
+        console.error('获取状态统计数据失败:', error)
+        this.statusError = error.message || '网络错误，请检查连接'
+      } finally {
+        this.statusLoading = false
+      }
+    },
+    
+    initRoleChart(retryCount = 0) {
+      const chartDom = this.$refs.roleChart
+      if (!chartDom) {
+        console.warn('角色图表DOM未找到')
+        // 如果重试次数小于3次，则重试
+        if (retryCount < 3) {
+          console.log(`重试图表初始化，第${retryCount + 1}次`)
+          setTimeout(() => this.initRoleChart(retryCount + 1), 200)
+        }
+        return
+      }
+      
+      // 确保容器有内容
+      if (chartDom.clientHeight === 0) {
+        console.warn('图表容器高度为0，等待DOM更新')
+        if (retryCount < 3) {
+          setTimeout(() => this.initRoleChart(retryCount + 1), 100)
+        }
+        return
+      }
+      
+      // 数据校验，避免空数据导致图表异常
+      if (this.roleData.length === 0) {
+        console.warn('角色数据为空，无法初始化图表')
+        return
+      }
+      
+      console.log('初始化角色图表，数据:', this.roleData)
+      console.log('X轴数据:', this.roleData.map(item => item.label))
+      console.log('Y轴数据:', this.roleData.map(item => item.value))
+      
+      // 如果已有图表实例，先销毁
+      if (this.roleChart) {
+        this.roleChart.dispose()
+      }
+      
+      this.roleChart = echarts.init(chartDom)
+      
+      const option = this.getChartOption(this.roleData, '#8b5cf6')
+      
+      this.roleChart.setOption(option)
+      
+      // 添加窗口resize监听
+      window.addEventListener('resize', this.handleRoleChartResize)
+      
+      console.log('角色图表设置完成，检查图表是否显示')
+    },
+    
+    handleRoleChartResize() {
+      if (this.roleChart) {
+        this.roleChart.resize()
+      }
+    },
+    
+    initStatusChart(retryCount = 0) {
+      const chartDom = this.$refs.statusChart
+      if (!chartDom) {
+        console.warn('状态图表DOM未找到')
+        // 如果重试次数小于3次，则重试
+        if (retryCount < 3) {
+          console.log(`重试图表初始化，第${retryCount + 1}次`)
+          setTimeout(() => this.initStatusChart(retryCount + 1), 200)
+        }
+        return
+      }
+      
+      // 确保容器有内容
+      if (chartDom.clientHeight === 0) {
+        console.warn('图表容器高度为0，等待DOM更新')
+        if (retryCount < 3) {
+          setTimeout(() => this.initStatusChart(retryCount + 1), 100)
+        }
+        return
+      }
+      
+      // 数据校验，避免空数据导致图表异常
+      if (this.statusData.length === 0) {
+        console.warn('状态数据为空，无法初始化图表')
+        return
+      }
+      
+      console.log('初始化状态图表，数据:', this.statusData)
+      console.log('X轴数据:', this.statusData.map(item => item.label))
+      console.log('Y轴数据:', this.statusData.map(item => item.value))
+      
+      // 如果已有图表实例，先销毁
+      if (this.statusChart) {
+        this.statusChart.dispose()
+      }
+      
+      this.statusChart = echarts.init(chartDom)
+      
+      const option = this.getChartOption(this.statusData, '#10b981')
+      
+      this.statusChart.setOption(option)
+    },
+    
+    // 公共图表配置函数
+    getChartOption(data, color) {
+      return {
+        tooltip: {
+          trigger: 'item', // 改为item触发，精准触发单个柱子
+          formatter: (params) => {
+            // 增加数据校验，避免params为空
+            if (!params || !params.name || params.value === undefined) return ''
+            return `<div style="font-weight: bold; color: #1e293b; margin-bottom: 4px;">${params.name}</div>
+                   <div style="color: ${color}; font-size: 14px;">用户数量: <span style="font-weight: bold;">${params.value}人</span></div>`
+          },
+          backgroundColor: 'rgba(255, 255, 255, 0.98)',
+          borderColor: color,
+          borderWidth: 2,
+          textStyle: {
+            color: '#1e293b',
+            fontSize: 13,
+            fontWeight: 'normal'
+          },
+          extraCssText: 'box-shadow: 0 8px 24px rgba(139, 92, 246, 0.25); border-radius: 8px; padding: 12px;',
+          position: 'bottom', // 调整显示位置避免被遮挡
+          alwaysShowContent: false,
+          // 移除confine: true，避免限制tooltip显示范围
+          transitionDuration: 0.2
+        },
+        axisPointer: {
+          show: false // 关闭坐标轴指示器，消除虚线
+        },
+        grid: {
+          left: '3%',
+          right: '4%',
+          bottom: '15%',
+          top: '10%',
+          containLabel: true
+        },
+        xAxis: {
+          type: 'category',
+          data: data.map(item => item.label),
+          axisLine: {
+            lineStyle: {
+              color: '#e2e8f0'
+            }
+          },
+          axisLabel: {
+            color: '#64748b',
+            fontSize: 12
+          }
+        },
+        yAxis: {
+          type: 'value',
+          axisLine: {
+            lineStyle: {
+              color: '#e2e8f0'
+            }
+          },
+          axisLabel: {
+            color: '#9ca3af',
+            fontSize: 11
+          },
+          splitLine: {
+            show: false
+          }
+        },
+        series: [
+          {
+            name: '用户数量',
+            type: 'bar',
+            data: data.map(item => item.value),
+            itemStyle: {
+              color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+                { offset: 0, color: color },
+                { offset: 1, color: this.getDarkerColor(color) }
+              ]),
+              borderRadius: [4, 4, 0, 0]
+            },
+            emphasis: {
+              itemStyle: {
+                shadowBlur: 10,
+                shadowColor: `rgba(${this.hexToRgb(color)}, 0.5)`,
+                borderColor: color,
+                borderWidth: 2
+              }
+            },
+            barWidth: '50%'
+          }
+        ]
+      }
+    },
+    
+    // 获取更深的颜色（用于渐变效果）
+    getDarkerColor(hexColor) {
+      // 简单的颜色加深逻辑
+      const colors = {
+        '#8b5cf6': '#7c3aed',
+        '#10b981': '#059669'
+      }
+      return colors[hexColor] || hexColor
+    },
+    
+    // 十六进制颜色转RGB（用于阴影效果）
+    hexToRgb(hex) {
+      const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex)
+      return result ? 
+        `${parseInt(result[1], 16)}, ${parseInt(result[2], 16)}, ${parseInt(result[3], 16)}` : 
+        '139, 92, 246' // 默认紫色
     }
   }
 }
@@ -154,108 +384,79 @@ export default {
   min-height: 280px;
 }
 
-/* Improved Y-axis styling and positioning */
-.y-axis {
-  display: flex;
-  flex-direction: column;
-  justify-content: space-between;
-  height: 240px;
-  padding-right: 12px;
-  margin-right: 12px;
-  border-right: 1px solid #e2e8f0;
-  flex-shrink: 0;
+.echart-container {
+  width: 100%;
+  height: 280px;
 }
 
-.y-axis-label {
-  font-size: 11px;
-  color: #9ca3af;
-  line-height: 1;
-  text-align: right;
-}
-
-/* Added chart-wrapper for better layout control */
-.chart-wrapper {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-}
-
-/* Improved bar chart spacing and layout */
-.bar-chart {
-  display: flex;
-  align-items: end;
-  justify-content: space-evenly;
-  height: 200px;
-  margin-bottom: 20px;
-  padding: 0 10px 0 10px;
-  flex: 1;
-  gap: 20px;
-}
-
-.bar-item {
+.loading-container {
   display: flex;
   flex-direction: column;
   align-items: center;
-  min-width: 60px;
-  margin-bottom: 8px;
+  justify-content: center;
+  width: 100%;
+  height: 280px;
+  color: #64748b;
 }
 
-.bar-wrapper {
-  height: 170px;
-  display: flex;
-  align-items: end;
-  width: 50px;
+.loading-spinner {
+  width: 32px;
+  height: 32px;
+  border: 3px solid #e2e8f0;
+  border-top: 3px solid #8b5cf6;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
   margin-bottom: 12px;
 }
 
-.bar {
+.error-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
   width: 100%;
-  border-radius: 4px 4px 0 0;
-  transition: all 0.3s ease;
-  min-height: 8px;
-  cursor: pointer;
-}
-
-.role-bar {
-  background: linear-gradient(180deg, #8b5cf6 0%, #7c3aed 100%);
-}
-
-.status-bar {
-  background: linear-gradient(180deg, #10b981 0%, #059669 100%);
-}
-
-.bar:hover {
-  opacity: 0.8;
-  transform: scaleY(1.05);
-}
-
-.bar-label {
-  font-size: 12px;
-  color: #64748b;
-  font-weight: 500;
+  height: 280px;
   text-align: center;
-  line-height: 1.2;
-  margin-top: 4px;
 }
 
-/* Removed conflicting chart-axis styles */
+.error-text {
+  color: #ef4444;
+  margin-bottom: 16px;
+  font-size: 14px;
+}
 
-.tooltip {
-  position: fixed;
-  background: rgba(0, 0, 0, 0.8);
+.retry-btn {
+  padding: 8px 16px;
+  background-color: #8b5cf6;
   color: white;
-  padding: 6px 10px;
-  border-radius: 4px;
-  font-size: 12px;
-  font-weight: 500;
-  pointer-events: none;
-  z-index: 1000;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 14px;
+  transition: background-color 0.2s;
+}
+
+.retry-btn:hover {
+  background-color: #7c3aed;
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
 }
 
 @media (max-width: 768px) {
   .stats-container {
     grid-template-columns: 1fr;
+  }
+  
+  .echart-container {
+    height: 240px;
+  }
+  
+  .loading-container,
+  .error-container {
+    height: 240px;
   }
 }
 </style>

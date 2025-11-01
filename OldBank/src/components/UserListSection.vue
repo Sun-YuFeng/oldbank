@@ -1,11 +1,57 @@
 <!-- 用户列表区 -->
- <template>
+<template>
   <div class="list-section">
+    <!-- 搜索和筛选区域 -->
+    <div class="filter-section">
+      <div class="filter-container">
+        <!-- 搜索框 -->
+        <div class="search-box">
+          <input 
+            type="text" 
+            placeholder="搜索用户名或手机号..."
+            class="search-input"
+            v-model="searchQuery"
+            @keyup.enter="handleSearchButton"
+          >
+          <i class="fas fa-search search-icon"></i>
+        </div>
+
+        <!-- 过滤器 -->
+        <div class="filters">
+          <select class="filter-select" v-model="roleFilter">
+            <option value="">所有角色</option>
+            <option value="管理员">管理员</option>
+            <option value="志愿者">志愿者</option>
+            <option value="需求者">需求者</option>
+          </select>
+
+          <select class="filter-select" v-model="statusFilter">
+            <option value="">所有状态</option>
+            <option value="活跃">活跃</option>
+            <option value="禁用">禁用</option>
+            <option value="待审核">待审核</option>
+          </select>
+        </div>
+
+        <!-- 搜索和重置按钮 -->
+        <div class="action-buttons">
+          <button class="search-btn" @click="handleSearchButton">
+            <i class="fas fa-search"></i>
+            搜索
+          </button>
+          <button class="reset-btn" @click="handleReset">
+            <i class="fas fa-redo"></i>
+            重置
+          </button>
+        </div>
+      </div>
+    </div>
+
     <div class="list-container">
       <div class="list-header">
         <h3 class="list-title">用户列表</h3>
         <div class="list-info">
-          <span class="info-text">共 {{ totalUsers }} 位用户，当前显示 {{ startIndex }}-{{ endIndex }} 位</span>
+          <span class="info-text">共 {{ paginationData.totalElements || 0 }} 位用户，当前显示 {{ startIndex }}-{{ endIndex }} 位</span>
         </div>
       </div>
 
@@ -16,29 +62,27 @@
               <th>用户名</th>
               <th>手机号</th>
               <th>角色</th>
-              <th>信用分</th>
-              <th>状态</th>
+              <th>信誉分</th>
+              <th>登录状态</th>
               <th>注册时间</th>
               <th>操作</th>
             </tr>
           </thead>
           <tbody>
-            <tr v-for="user in paginatedUsers" :key="user.id" class="table-row">
-              <td class="user-name">{{ user.username }}</td>
-              <td class="phone-number">{{ user.phone }}</td>
-              <td class="user-role">{{ user.role }}</td>
-              <td class="credit-score">{{ user.credit }}</td>
+            <tr v-for="user in userList" :key="user.id" class="table-row">
+              <td class="user-name">{{ user.username || user.name || 'N/A' }}</td>
+              <td class="phone-number">{{ user.phone || user.phoneNumber || 'N/A' }}</td>
+              <td class="user-role">{{ user.userIdentity || user.role || '普通用户' }}</td>
+              <td class="warm-coin">{{ user.warmCoin || user.coin || 0 }}</td>
               <td>
-                <span :class="['status-badge', getStatusClass(user.status)]">
-                  {{ user.status }}
+                <span :class="['status-badge', getLoginStatusClass(user.status)]">
+                  {{ getLoginStatusText(user.status) }}
                 </span>
               </td>
-              <td class="register-time">{{ user.registerTime }}</td>
+              <td class="register-time">{{ user.registerTime || user.createTime || 'N/A' }}</td>
               <td class="actions">
                 <button class="action-btn edit-btn">编辑</button>
-                <button :class="['action-btn', user.status === '禁用' ? 'enable-btn' : 'disable-btn']">
-                  {{ user.status === '禁用' ? '启用' : '禁用' }}
-                </button>
+                <button class="action-btn disable-btn">禁用</button>
               </td>
             </tr>
           </tbody>
@@ -50,27 +94,25 @@
         <div class="pagination">
           <button 
             class="pagination-btn" 
-            :disabled="currentPage === 1"
-            @click="changePage(currentPage - 1)"
+            :class="{ 'pagination-btn-disabled': paginationData.first || paginationData.totalPages === 0, 'pagination-btn-active': !paginationData.first && paginationData.totalPages > 0 }"
+            :disabled="paginationData.first || paginationData.totalPages === 0"
+            @click="changePage(paginationData.pageNumber - 1)"
           >
             上一页
           </button>
           
-          <div class="page-numbers">
-            <button 
-              v-for="page in totalPages" 
-              :key="page"
-              :class="['page-btn', { active: page === currentPage }]"
-              @click="changePage(page)"
-            >
-              {{ page }}
-            </button>
+          <div class="page-info">
+            第 {{ currentPage }} 页 / 共 {{ paginationData.totalPages || 0 }} 页
+            <span v-if="paginationData.totalElements > 0" class="total-elements">
+              (共 {{ paginationData.totalElements }} 条数据)
+            </span>
           </div>
           
           <button 
             class="pagination-btn" 
-            :disabled="currentPage === totalPages"
-            @click="changePage(currentPage + 1)"
+            :class="{ 'pagination-btn-disabled': paginationData.last || paginationData.totalPages === 0, 'pagination-btn-active': !paginationData.last && paginationData.totalPages > 0 }"
+            :disabled="paginationData.last || paginationData.totalPages === 0"
+            @click="changePage(paginationData.pageNumber + 1)"
           >
             下一页
           </button>
@@ -81,217 +123,462 @@
 </template>
 
 <script>
+import { getUserList, getUserCount, getUserListWithFilters } from '@/utils/api'
+
 export default {
   name: 'UserListSection',
   data() {
     return {
-      users: [
-        {
-          id: 1,
-          username: 'user1',
-          phone: '13816277518',
-          role: '管理员',
-          credit: 226,
-          status: '待审核',
-          registerTime: '2025-08-05'
-        },
-        {
-          id: 2,
-          username: 'user2',
-          phone: '13884068310',
-          role: '志愿者',
-          credit: 736,
-          status: '活跃',
-          registerTime: '2025-07-29'
-        },
-        {
-          id: 3,
-          username: 'user3',
-          phone: '13891706193',
-          role: '志愿者',
-          credit: 231,
-          status: '活跃',
-          registerTime: '2025-08-21'
-        },
-        {
-          id: 4,
-          username: 'user4',
-          phone: '13880348157',
-          role: '管理员',
-          credit: 637,
-          status: '禁用',
-          registerTime: '2025-08-24'
-        },
-        {
-          id: 5,
-          username: 'user5',
-          phone: '13893284372',
-          role: '志愿者',
-          credit: 826,
-          status: '待审核',
-          registerTime: '2025-08-19'
-        },
-        {
-          id: 6,
-          username: 'user6',
-          phone: '13876593440',
-          role: '志愿者',
-          credit: 890,
-          status: '待审核',
-          registerTime: '2025-08-09'
-        },
-        {
-          id: 7,
-          username: 'user7',
-          phone: '13877961411',
-          role: '管理员',
-          credit: 725,
-          status: '待审核',
-          registerTime: '2025-08-11'
-        },
-        {
-          id: 8,
-          username: 'user8',
-          phone: '13846169087',
-          role: '需求者',
-          credit: 213,
-          status: '待审核',
-          registerTime: '2025-08-01'
-        },
-        {
-          id: 9,
-          username: 'user9',
-          phone: '13847273438',
-          role: '管理员',
-          credit: 618,
-          status: '待审核',
-          registerTime: '2025-08-06'
-        },
-        {
-          id: 10,
-          username: 'user10',
-          phone: '13812345678',
-          role: '志愿者',
-          credit: 450,
-          status: '活跃',
-          registerTime: '2025-08-15'
-        },
-        {
-          id: 11,
-          username: 'user11',
-          phone: '13823456789',
-          role: '需求者',
-          credit: 320,
-          status: '活跃',
-          registerTime: '2025-08-20'
-        },
-        {
-          id: 12,
-          username: 'user12',
-          phone: '13834567890',
-          role: '志愿者',
-          credit: 780,
-          status: '禁用',
-          registerTime: '2025-08-12'
-        },
-        {
-          id: 13,
-          username: 'user13',
-          phone: '13845678901',
-          role: '管理员',
-          credit: 920,
-          status: '活跃',
-          registerTime: '2025-08-08'
-        },
-        {
-          id: 14,
-          username: 'user14',
-          phone: '13856789012',
-          role: '志愿者',
-          credit: 550,
-          status: '待审核',
-          registerTime: '2025-08-25'
-        },
-        {
-          id: 15,
-          username: 'user15',
-          phone: '13867890123',
-          role: '需求者',
-          credit: 410,
-          status: '活跃',
-          registerTime: '2025-08-18'
-        },
-        {
-          id: 16,
-          username: 'user16',
-          phone: '13878901234',
-          role: '志愿者',
-          credit: 680,
-          status: '待审核',
-          registerTime: '2025-08-22'
-        },
-        {
-          id: 17,
-          username: 'user17',
-          phone: '13889012345',
-          role: '管理员',
-          credit: 830,
-          status: '活跃',
-          registerTime: '2025-08-14'
-        },
-        {
-          id: 18,
-          username: 'user18',
-          phone: '13890123456',
-          role: '需求者',
-          credit: 290,
-          status: '禁用',
-          registerTime: '2025-08-07'
-        }
-      ],
-      currentPage: 1,
-      pageSize: 9
+      userList: [],
+      paginationData: {
+        content: [],
+        totalElements: 0,
+        totalPages: 0,
+        pageNumber: 0,
+        pageSize: 10,
+        first: true,
+        last: false,
+        empty: false
+      },
+      loading: false,
+      searchQuery: '',
+      roleFilter: '',
+      statusFilter: '',
+      searchTimer: null
     }
   },
   computed: {
-    totalUsers() {
-      return this.users.length
-    },
-    totalPages() {
-      return Math.ceil(this.totalUsers / this.pageSize)
-    },
-    paginatedUsers() {
-      const startIndex = (this.currentPage - 1) * this.pageSize
-      const endIndex = startIndex + this.pageSize
-      return this.users.slice(startIndex, endIndex)
-    },
     startIndex() {
-      return (this.currentPage - 1) * this.pageSize + 1
+      // 后端返回0-based页码，前端显示1-based页码
+      const pageNum = (this.paginationData.pageNumber || 0) + 1
+      const pageSize = this.paginationData.pageSize || 10
+      const totalElements = this.paginationData.totalElements || 0
+      
+      if (totalElements === 0) return 0
+      return (pageNum - 1) * pageSize + 1
     },
     endIndex() {
-      const end = this.currentPage * this.pageSize
-      return end > this.totalUsers ? this.totalUsers : end
+      // 后端返回0-based页码，前端显示1-based页码
+      const pageNum = (this.paginationData.pageNumber || 0) + 1
+      const pageSize = this.paginationData.pageSize || 10
+      const totalElements = this.paginationData.totalElements || 0
+      
+      if (totalElements === 0) return 0
+      const end = pageNum * pageSize
+      return end > totalElements ? totalElements : end
+    },
+    currentPage() {
+      // 后端返回0-based页码，前端显示1-based页码
+      return (this.paginationData.pageNumber || 0) + 1
+    },
+    visiblePages() {
+      const currentPage = this.currentPage
+      const totalPages = this.paginationData.totalPages || 0
+      const pages = []
+      
+      if (totalPages === 0) return pages
+      
+      // 智能分页逻辑：显示1，2，3...n，中间显示...
+      const maxVisiblePages = 7 // 最多显示7个页码
+      
+      if (totalPages <= maxVisiblePages) {
+        // 总页数较少，显示所有页码
+        for (let i = 1; i <= totalPages; i++) {
+          pages.push(i)
+        }
+      } else {
+        // 总页数较多，使用智能分页
+        const startPage = Math.max(1, currentPage - 2)
+        const endPage = Math.min(totalPages, currentPage + 2)
+        
+        // 始终显示第一页
+        pages.push(1)
+        
+        // 如果当前页离第一页较远，显示省略号
+        if (startPage > 2) {
+          pages.push('...')
+        }
+        
+        // 显示当前页附近的页码
+        for (let i = startPage; i <= endPage; i++) {
+          if (i > 1 && i < totalPages) {
+            pages.push(i)
+          }
+        }
+        
+        // 如果当前页离最后一页较远，显示省略号
+        if (endPage < totalPages - 1) {
+          pages.push('...')
+        }
+        
+        // 始终显示最后一页
+        if (totalPages > 1) {
+          pages.push(totalPages)
+        }
+      }
+      
+      return pages
     }
   },
+  async mounted() {
+    await this.fetchUserCount()
+    await this.fetchUserList(1) // 从第1页开始
+  },
   methods: {
-    getStatusClass(status) {
-      const statusMap = {
-        '活跃': 'status-active',
-        '禁用': 'status-disabled',
-        '待审核': 'status-pending'
+    async fetchUserCount() {
+      try {
+        const response = await getUserCount(false) // 不包含已删除用户
+        if (response.code === 200) {
+          // 根据用户总数计算总页数（每页10条数据）
+          const totalElements = response.data
+          const totalPages = Math.ceil(totalElements / this.paginationData.pageSize)
+          
+          // 更新分页数据
+          this.paginationData.totalElements = totalElements
+          this.paginationData.totalPages = totalPages
+          
+          console.log('用户总数:', totalElements, '总页数:', totalPages)
+        }
+      } catch (error) {
+        console.error('获取用户总数失败:', error)
+        
+        // 如果是401错误，跳转到登录页
+        if (error.code === 401) {
+          alert('登录已过期，请重新登录')
+          this.$router.push('/login')
+          return
+        }
+        
+        // 其他错误使用默认值
+        this.paginationData.totalElements = 0
+        this.paginationData.totalPages = 0
       }
-      return statusMap[status] || 'status-default'
     },
-    changePage(page) {
-      if (page >= 1 && page <= this.totalPages) {
-        this.currentPage = page
+    
+    // 基础分页：不传递参数，查询所有用户
+    async fetchUserList(pageNumber = 0) {
+      this.loading = true
+      try {
+        // 后端API使用1-based页码，所以需要将0-based转换为1-based
+        const response = await getUserList(pageNumber + 1, this.paginationData.pageSize)
+        console.log('获取用户列表响应:', response)
+        if (response.code === 200) {
+          this.userList = response.data.content || []
+          this.paginationData = {
+            ...response.data,
+            pageNumber: pageNumber // 使用传入的0-based页码
+          }
+          console.log('更新后的用户列表:', this.userList)
+          console.log('更新后的分页数据:', this.paginationData)
+        }
+      } catch (error) {
+        console.error('获取用户列表失败:', error)
+        
+        // 如果是401错误，跳转到登录页
+        if (error.code === 401) {
+          alert('登录已过期，请重新登录')
+          this.$router.push('/login')
+          return
+        }
+        
+        // 其他错误显示空数据
+        this.userList = []
+        this.paginationData = {
+          content: [],
+          totalElements: 0,
+          totalPages: 0,
+          pageNumber: 0,
+          pageSize: 10,
+          first: true,
+          last: true,
+          empty: true
+        }
+      } finally {
+        this.loading = false
       }
+    },
+    
+    // 搜索/筛选分页：传递参数，查询符合条件的用户
+    async fetchUserListWithFilters(pageNumber = 0) {
+      this.loading = true
+      try {
+        // 后端API使用1-based页码，所以需要将0-based转换为1-based
+        const response = await getUserListWithFilters(
+          pageNumber + 1, 
+          this.paginationData.pageSize,
+          this.searchQuery,
+          this.roleFilter,
+          this.statusFilter
+        )
+        console.log('获取用户列表响应（带参数）:', response)
+        if (response.code === 200) {
+          this.userList = response.data.content || []
+          this.paginationData = {
+            ...response.data,
+            pageNumber: pageNumber // 使用传入的0-based页码
+          }
+          console.log('更新后的用户列表（带参数）:', this.userList)
+          console.log('更新后的分页数据（带参数）:', this.paginationData)
+        }
+      } catch (error) {
+        console.error('获取用户列表失败（带参数）:', error)
+        
+        // 如果是401错误，跳转到登录页
+        if (error.code === 401) {
+          alert('登录已过期，请重新登录')
+          this.$router.push('/login')
+          return
+        }
+        
+        // 其他错误显示空数据
+        this.userList = []
+        this.paginationData = {
+          content: [],
+          totalElements: 0,
+          totalPages: 0,
+          pageNumber: 0,
+          pageSize: 10,
+          first: true,
+          last: true,
+          empty: true
+        }
+      } finally {
+        this.loading = false
+      }
+    },
+    
+    getLoginStatusText(status) {
+      if (status === -1) return '从未登录'
+      if (status === 0) return '今天登录'
+      if (status === 1) return '1天前登录'
+      if (status === 7) return '7天前登录'
+      if (status === 30) return '30天前登录'
+      if (status === 365) return '365天前登录'
+      return `${status}天前登录`
+    },
+    
+    getLoginStatusClass(status) {
+      if (status === -1) return 'status-never-login'
+      if (status === 0) return 'status-today-login'
+      if (status <= 7) return 'status-recent-login'
+      if (status <= 30) return 'status-month-login'
+      return 'status-long-time-login'
+    },
+    
+    changePage(pageNumber) {
+      // 后端API使用1-based页码，但前端内部使用0-based页码
+      // 页码范围应该是0到totalPages-1
+      if (pageNumber >= 0 && pageNumber < this.paginationData.totalPages) {
+        // 根据是否有搜索/筛选条件选择调用哪个方法
+        if (this.hasSearchOrFilter()) {
+          this.fetchUserListWithFilters(pageNumber)
+        } else {
+          this.fetchUserList(pageNumber)
+        }
+      }
+    },
+    
+    // 检查是否有搜索或筛选条件
+    hasSearchOrFilter() {
+      return this.searchQuery.trim() !== '' || this.roleFilter !== '' || this.statusFilter !== ''
+    },
+    
+
+    
+
+    
+    performSearchAndFilter() {
+      // 重置到第一页进行搜索和筛选，使用带参数的分页方法
+      // 搜索时不需要调用fetchUserCount，因为搜索结果会返回正确的分页信息
+      this.fetchUserListWithFilters(0)
+    },
+    
+    handleSearchButton() {
+      // 立即执行搜索，无需防抖
+      if (this.searchTimer) {
+        clearTimeout(this.searchTimer)
+      }
+      this.performSearchAndFilter()
+    },
+    
+    handleReset() {
+      // 重置所有筛选条件
+      this.searchQuery = ''
+      this.roleFilter = ''
+      this.statusFilter = ''
+      
+      // 重置到第一页，并重新获取默认的用户总数
+      this.fetchUserCount()
+      this.fetchUserList(0)
     }
   }
 }
 </script>
 
 <style scoped>
+.filter-section {
+  margin-bottom: 24px;
+}
+
+.filter-container {
+  background: white;
+  padding: 20px;
+  border-radius: 12px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+  border: 1px solid #e2e8f0;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.search-box {
+  position: relative;
+  flex: 1;
+  min-width: 200px;
+}
+
+.search-input {
+  width: 100%;
+  padding: 12px 16px 12px 44px;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  font-size: 14px;
+  background-color: #f9fafb;
+  transition: all 0.2s ease;
+}
+
+.search-input:focus {
+  outline: none;
+  border-color: #3b82f6;
+  background-color: white;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+
+.search-icon {
+  position: absolute;
+  left: 16px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: #9ca3af;
+  font-size: 14px;
+}
+
+.filters {
+  display: flex;
+  gap: 12px;
+}
+
+.filter-select {
+  padding: 12px 16px;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  background-color: white;
+  font-size: 14px;
+  color: #374151;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  min-width: 120px;
+}
+
+.filter-select:focus {
+  outline: none;
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+
+.filter-select:hover {
+  border-color: #9ca3af;
+}
+
+/* 搜索和重置按钮样式 */
+.action-buttons {
+  display: flex;
+  gap: 8px;
+}
+
+.search-btn, .reset-btn {
+  padding: 10px 20px;
+  border: none;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 80px;
+  justify-content: center;
+  white-space: nowrap;
+}
+
+.search-btn {
+  background-color: #3b82f6;
+  color: white;
+}
+
+.search-btn:hover {
+  background-color: #2563eb;
+  transform: translateY(-1px);
+}
+
+.reset-btn {
+  background-color: #f3f4f6;
+  color: #374151;
+  border: 1px solid #d1d5db;
+}
+
+.reset-btn:hover {
+  background-color: #e5e7eb;
+  border-color: #9ca3af;
+  transform: translateY(-1px);
+}
+
+/* 搜索和重置按钮样式 */
+.action-buttons {
+  display: flex;
+  gap: 8px;
+}
+
+.search-btn, .reset-btn {
+  padding: 10px 20px;
+  border: none;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 80px;
+  justify-content: center;
+  white-space: nowrap;
+}
+
+.search-btn {
+  background-color: #3b82f6;
+  color: white;
+}
+
+.search-btn:hover {
+  background-color: #2563eb;
+  transform: translateY(-1px);
+}
+
+.reset-btn {
+  background-color: #f3f4f6;
+  color: #374151;
+  border: 1px solid #d1d5db;
+}
+
+.reset-btn:hover {
+  background-color: #e5e7eb;
+  border-color: #9ca3af;
+  transform: translateY(-1px);
+}
+
 .list-section {
   margin-bottom: 24px;
 }
@@ -376,19 +663,30 @@ export default {
   min-width: 60px;
 }
 
-.status-active {
+/* 登录状态样式 */
+.status-never-login {
+  background-color: #f3f4f6;
+  color: #6b7280;
+}
+
+.status-today-login {
   background-color: #dcfce7;
   color: #166534;
 }
 
-.status-disabled {
-  background-color: #fee2e2;
-  color: #dc2626;
+.status-recent-login {
+  background-color: #dbeafe;
+  color: #1e40af;
 }
 
-.status-pending {
+.status-month-login {
   background-color: #fef3c7;
-  color: #d97706;
+  color: #92400e;
+}
+
+.status-long-time-login {
+  background-color: #fee2e2;
+  color: #991b1b;
 }
 
 .actions {
@@ -469,32 +767,63 @@ export default {
   background: #f9fafb;
 }
 
-.page-numbers {
-  display: flex;
-  gap: 4px;
-}
-
-.page-btn {
-  padding: 8px 12px;
-  border: 1px solid #d1d5db;
-  background: white;
-  border-radius: 6px;
+.page-info {
   font-size: 14px;
-  color: #374151;
-  cursor: pointer;
-  transition: all 0.2s ease;
-  min-width: 40px;
+  color: #6b7280;
+  font-weight: 500;
+  padding: 0 16px;
 }
 
-.page-btn:hover {
-  background: #f3f4f6;
-  border-color: #9ca3af;
+.total-elements {
+  font-size: 12px;
+  color: #9ca3af;
+  margin-left: 8px;
 }
 
-.page-btn.active {
-  background: #3b82f6;
-  border-color: #3b82f6;
-  color: white;
+/* 分页按钮激活状态 */
+.pagination-btn-active {
+  background-color: #3b82f6 !important;
+  color: white !important;
+  border-color: #3b82f6 !important;
+}
+
+.pagination-btn-active:hover {
+  background-color: #2563eb !important;
+  border-color: #2563eb !important;
+}
+
+/* 分页按钮禁用状态 */
+.pagination-btn-disabled {
+  background-color: #f9fafb !important;
+  color: #9ca3af !important;
+  border-color: #d1d5db !important;
+  cursor: not-allowed !important;
+}
+
+.total-elements {
+  font-size: 12px;
+  color: #9ca3af;
+  margin-left: 8px;
+}
+
+/* 分页按钮激活状态 */
+.pagination-btn-active {
+  background-color: #3b82f6 !important;
+  color: white !important;
+  border-color: #3b82f6 !important;
+}
+
+.pagination-btn-active:hover {
+  background-color: #2563eb !important;
+  border-color: #2563eb !important;
+}
+
+/* 分页按钮禁用状态 */
+.pagination-btn-disabled {
+  background-color: #f9fafb !important;
+  color: #9ca3af !important;
+  border-color: #d1d5db !important;
+  cursor: not-allowed !important;
 }
 
 @media (max-width: 768px) {

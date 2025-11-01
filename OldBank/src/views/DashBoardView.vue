@@ -16,19 +16,19 @@
       <div class="stats-wrapper">
         <StatCard 
           title="总服务量" 
-          value="1289" 
+          :value="dashboardStats.totalServices || 0" 
           iconClass="fas fa-chart-line" 
           iconBgClass="bg-blue"
         />
         <StatCard 
           title="活跃志愿者" 
-          value="56" 
+          :value="dashboardStats.activeVolunteers || 0" 
           iconClass="fas fa-users" 
           iconBgClass="bg-green"
         />
         <StatCard 
           title="异常预警" 
-          value="12" 
+          :value="dashboardStats.warningAlerts || 0" 
           iconClass="fas fa-exclamation-triangle" 
           iconBgClass="bg-red"
           valueClass="text-red"
@@ -52,6 +52,7 @@
 import StatCard from '../components/StatCard.vue';
 import ServiceTrendChart from '../components/ServiceTrendChart.vue';
 import VolunteerTable from '../components/VolunteerTable.vue';
+import { getDashboardStats } from '../utils/api.js';
 
 export default {
   name: 'DashboardView',
@@ -59,6 +60,42 @@ export default {
     StatCard,
     ServiceTrendChart,
     VolunteerTable
+  },
+  data() {
+    return {
+      dashboardStats: {
+        totalServices: 0,
+        activeVolunteers: 0,
+        warningAlerts: 0
+      },
+      loading: false
+    }
+  },
+  mounted() {
+    this.fetchDashboardStats();
+  },
+  methods: {
+    async fetchDashboardStats() {
+      this.loading = true;
+      try {
+        const response = await getDashboardStats();
+        if (response.code === 200) {
+          this.dashboardStats = response.data;
+        } else {
+          console.error('获取仪表盘统计数据失败:', response.message);
+        }
+      } catch (error) {
+        console.error('获取仪表盘统计数据出错:', error);
+        // 如果接口调用失败，使用默认值
+        this.dashboardStats = {
+          totalServices: 1289,
+          activeVolunteers: 56,
+          warningAlerts: 12
+        };
+      } finally {
+        this.loading = false;
+      }
+    }
   }
 };
 </script>

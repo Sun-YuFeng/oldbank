@@ -9,15 +9,18 @@
       </nav>
     </div>
 
-    <!-- 第二区域：搜索过滤器 -->
-    <UserFilterSection />
+
 
     <!-- 近七天创号人数统计图 -->
     <div class="chart-section">
       <div class="chart-card large-chart">
         <h3 class="chart-title">近七天创号人数统计</h3>
         <div class="chart-container">
-          <div ref="userCreationChart" class="chart" style="height: 400px;"></div>
+          <div v-if="loading" class="chart-loading">
+            <div class="loading-spinner"></div>
+            <span>正在加载数据...</span>
+          </div>
+          <div v-else ref="userCreationChart" class="chart" style="height: 400px;"></div>
         </div>
       </div>
     </div>
@@ -31,25 +34,29 @@
 </template>
 
 <script>
-import UserFilterSection from '../components/UserFilterSection.vue'
 import UserStatsSection from '../components/UserStatsSection.vue'
 import UserListSection from '../components/UserListSection.vue'
 import * as echarts from 'echarts'
+import { getUserCreationStats } from '../utils/api'
 
 export default {
   name: 'UserManagementPage',
   components: {
-    UserFilterSection,
     UserStatsSection,
     UserListSection
   },
   data() {
     return {
-      chartInstance: null
+      chartInstance: null,
+      loading: false,
+      chartData: {
+        dates: [],
+        counts: []
+      }
     }
   },
   mounted() {
-    this.initChart()
+    this.loadChartData()
   },
   beforeUnmount() {
     if (this.chartInstance) {
@@ -57,13 +64,40 @@ export default {
     }
   },
   methods: {
-    initChart() {
-      const chartDom = this.$refs.userCreationChart
-      if (!chartDom) return
+    async loadChartData() {
+      this.loading = true
+      try {
+        const response = await getUserCreationStats(7)
+        if (response.code === 200) {
+          this.chartData = response.data
+          // 在控制台打印获取到的数据
+          console.log('近七天创建账号用户数量数据:', response.data)
+          console.log('日期:', response.data.dates)
+          console.log('创号人数:', response.data.counts)
+        } else {
+          console.error('获取创号统计失败:', response.message)
+          // 如果API调用失败，使用模拟数据作为降级方案
+          this.useFallbackData()
+          return
+        }
+      } catch (error) {
+        console.error('获取创号统计出错:', error)
+        // 如果API调用出错，使用模拟数据作为降级方案
+        this.useFallbackData()
+        return
+      }
       
-      this.chartInstance = echarts.init(chartDom)
-      
-      // 生成最近七天的日期
+      // 数据加载完成后，设置loading为false，然后初始化图表
+      this.loading = false
+      this.$nextTick(() => {
+        setTimeout(() => {
+          this.initChart()
+        }, 100)
+      })
+    },
+    
+    useFallbackData() {
+      // 生成最近七天的日期作为降级数据
       const dates = []
       for (let i = 6; i >= 0; i--) {
         const date = new Date()
@@ -72,7 +106,48 @@ export default {
       }
       
       // 模拟近七天创号人数数据
-      const userCounts = [12, 18, 15, 22, 19, 25, 21]
+      const counts = [12, 18, 15, 22, 19, 25, 21]
+      
+      this.chartData = { dates, counts }
+      // 降级数据加载完成后，设置loading为false，然后初始化图表
+      this.loading = false
+      this.$nextTick(() => {
+        setTimeout(() => {
+          this.initChart()
+        }, 100)
+      })
+    },
+    
+    initChart(retryCount = 0) {
+      const chartDom = this.$refs.userCreationChart
+      if (!chartDom) {
+        console.error('图表容器未找到')
+        // 如果重试次数小于3次，则重试
+        if (retryCount < 3) {
+          console.log(`重试图表初始化，第${retryCount + 1}次`)
+          setTimeout(() => this.initChart(retryCount + 1), 200)
+        }
+        return
+      }
+      
+      // 确保容器有内容
+      if (chartDom.clientHeight === 0) {
+        console.warn('图表容器高度为0，等待DOM更新')
+        if (retryCount < 3) {
+          setTimeout(() => this.initChart(retryCount + 1), 100)
+        }
+        return
+      }
+      
+      // 如果已有图表实例，先销毁
+      if (this.chartInstance) {
+        this.chartInstance.dispose()
+      }
+      
+      this.chartInstance = echarts.init(chartDom)
+      
+      // 打印图表数据用于调试
+      console.log('图表初始化数据:', this.chartData)
       
       const option = {
         tooltip: {
@@ -96,7 +171,7 @@ export default {
         },
         xAxis: {
           type: 'category',
-          data: dates,
+          data: this.chartData.dates,
           axisLine: {
             lineStyle: {
               color: '#e2e8f0'
@@ -128,14 +203,18 @@ export default {
           {
             name: '创号人数',
             type: 'line',
-            data: userCounts,
+            data: this.chartData.counts,
             smooth: true,
+            symbol: 'circle',
+            symbolSize: 8,
             lineStyle: {
               width: 4,
               color: '#3b82f6'
             },
             itemStyle: {
-              color: '#3b82f6'
+              color: '#3b82f6',
+              borderColor: '#fff',
+              borderWidth: 2
             },
             areaStyle: {
               color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
@@ -147,7 +226,7 @@ export default {
               itemStyle: {
                 color: '#1d4ed8',
                 borderColor: '#fff',
-                borderWidth: 2,
+                borderWidth: 3,
                 shadowBlur: 10,
                 shadowColor: 'rgba(59, 130, 246, 0.5)'
               },
@@ -166,6 +245,8 @@ export default {
       window.addEventListener('resize', () => {
         this.chartInstance.resize()
       })
+      
+      console.log('图表初始化完成')
     }
   }
 }
@@ -240,5 +321,30 @@ export default {
 
 .chart {
   width: 100%;
+}
+
+.chart-loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 400px;
+  color: #64748b;
+  font-size: 14px;
+}
+
+.loading-spinner {
+  width: 32px;
+  height: 32px;
+  border: 3px solid #e2e8f0;
+  border-top: 3px solid #3b82f6;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+  margin-bottom: 12px;
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
 }
 </style>

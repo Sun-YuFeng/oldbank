@@ -18,9 +18,9 @@ export default defineConfig({
   server: {
     proxy: {
       '/api': {
-        target: 'http://192.168.38.39:8080/silveragepass',
+        target: 'http://192.168.20.39:8080/silveragepass',
         changeOrigin: true,
-        rewrite: (path) => path.replace(/^\/api/, '')
+        rewrite: (path) => path.replace(/^\/api/, '/api')  // 保持/api前缀
       }
     }
   }
