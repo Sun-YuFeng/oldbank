@@ -4,7 +4,10 @@
     <div class="table-header">
       <h3>任务列表</h3>
       <div class="table-info">
-        共 {{ totalTasks }} 条任务，当前显示 {{ startIndex }}-{{ endIndex }} 条
+        <span v-if="loading">加载中...</span>
+        <span v-else>
+          共 {{ totalTasks }} 条任务，当前显示 {{ startIndex }}-{{ endIndex }} 条
+        </span>
       </div>
     </div>
     
@@ -14,25 +17,41 @@
           <tr>
             <th>任务ID</th>
             <th>标题</th>
-            <th>提交人</th>
-            <th>信用分</th>
+            <th>发布人</th>
+            <th>发布人电话</th>
+            <th>暖币</th>
             <th>状态</th>
-            <th>提交时间</th>
+            <th>志愿者</th>
+            <th>服务地址</th>
+            <th>发布时间</th>
             <th>操作</th>
           </tr>
         </thead>
         <tbody>
-          <tr v-for="task in paginatedTasks" :key="task.id">
+          <tr v-if="loading">
+            <td colspan="10" style="text-align: center; padding: 40px;">
+              <span>加载中...</span>
+            </td>
+          </tr>
+          <tr v-else-if="tasks.length === 0">
+            <td colspan="10" style="text-align: center; padding: 40px;">
+              <span>暂无任务数据</span>
+            </td>
+          </tr>
+          <tr v-else v-for="task in tasks" :key="task.id">
             <td>{{ task.id }}</td>
             <td class="task-title">{{ task.title }}</td>
-            <td>{{ task.submitter }}</td>
-            <td>{{ task.score }}</td>
+            <td>{{ task.publisherName }}</td>
+            <td>{{ task.publisherPhone }}</td>
+            <td>{{ task.warmCoin }}</td>
             <td>
-              <span :class="getStatusClass(task.status)">
-                {{ getStatusText(task.status) }}
+              <span :class="getStatusClass(task.statusCode)">
+                {{ task.status }}
               </span>
             </td>
-            <td>{{ task.submitTime }}</td>
+            <td>{{ task.volunteerName || '暂无' }}</td>
+            <td>{{ task.serviceAddress }}</td>
+            <td>{{ task.publishTime }}</td>
             <td>
               <TaskOperationCell 
                 :task="task"
@@ -46,108 +65,138 @@
       </table>
     </div>
     
-    <div class="pagination">
-      <button 
-        class="pagination-btn"
-        :disabled="currentPage === 1"
-        @click="previousPage"
-      >
-        上一页
-      </button>
-      <span class="page-info">{{ currentPage }}</span>
-      <button 
-        class="pagination-btn"
-        :disabled="currentPage === totalPages"
-        @click="nextPage"
-      >
-        下一页
-      </button>
+    <!-- ElementUI分页组件 -->
+    <div class="pagination-container" v-if="!loading && totalTasks >= pageSize">
+      <el-pagination
+        v-model:current-page="currentPage"
+        v-model:page-size="pageSize"
+        :total="totalTasks"
+        :page-sizes="[10, 20, 50, 100]"
+        layout="total, sizes, prev, pager, next, jumper"
+        @size-change="handleSizeChange"
+        @current-change="handleCurrentChange"
+      />
     </div>
+
+    <!-- 任务详情弹窗 -->
+    <TaskDetailModal 
+      v-model:visible="showDetailModal"
+      :task-id="selectedTaskId"
+    />
   </div>
 </template>
 
 <script setup>
-import { ref, computed } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
+import { getTaskList } from '../utils/api.js'
 import TaskOperationCell from './TaskOperationCell.vue'
+import TaskDetailModal from './TaskDetailModal.vue'
+
+const props = defineProps({
+  searchQuery: {
+    type: String,
+    default: ''
+  },
+  statusFilter: {
+    type: String,
+    default: ''
+  }
+})
 
 const currentPage = ref(1)
 const pageSize = ref(10)
+const loading = ref(false)
+const tasks = ref([])
+const totalTasks = ref(0)
+const showDetailModal = ref(false)
+const selectedTaskId = ref(null)
 
-const tasks = ref([
-  { id: 'task_1', title: '代购生活用品', submitter: 'user3', score: 84, status: 'approved', submitTime: '2025/8/20 00:08:10' },
-  { id: 'task_2', title: '陪同就医', submitter: 'user76', score: 107, status: 'approved', submitTime: '2025/8/21 19:09:24' },
-  { id: 'task_3', title: '家电维修', submitter: 'user22', score: 115, status: 'approved', submitTime: '2025/8/24 08:32:33' },
-  { id: 'task_4', title: '代取快递', submitter: 'user11', score: 145, status: 'rejected', submitTime: '2025/8/19 04:26:42' },
-  { id: 'task_5', title: '陪聊', submitter: 'user77', score: 138, status: 'rejected', submitTime: '2025/8/22 06:41:53' },
-  { id: 'task_6', title: '代购生活用品', submitter: 'user82', score: 122, status: 'rejected', submitTime: '2025/8/25 07:18:00' },
-  { id: 'task_7', title: '陪同就医', submitter: 'user37', score: 90, status: 'rejected', submitTime: '2025/8/18 20:54:59' },
-  { id: 'task_8', title: '家电维修', submitter: 'user93', score: 137, status: 'pending', submitTime: '2025/8/25 13:52:29' },
-  { id: 'task_9', title: '代取快递', submitter: 'user89', score: 118, status: 'rejected', submitTime: '2025/8/24 14:10:43' },
-  { id: 'task_10', title: '陪聊', submitter: 'user53', score: 87, status: 'pending', submitTime: '2025/8/19 16:38:31' }
-])
-
-const totalTasks = computed(() => tasks.value.length)
-const totalPages = computed(() => Math.ceil(totalTasks.value / pageSize.value))
+// 计算属性
 const startIndex = computed(() => (currentPage.value - 1) * pageSize.value + 1)
 const endIndex = computed(() => Math.min(currentPage.value * pageSize.value, totalTasks.value))
 
-const paginatedTasks = computed(() => {
-  const start = (currentPage.value - 1) * pageSize.value
-  const end = start + pageSize.value
-  return tasks.value.slice(start, end)
-})
-
-const getStatusClass = (status) => {
+// 状态样式映射
+const getStatusClass = (statusCode) => {
   const classes = {
-    'approved': 'status-approved',
-    'rejected': 'status-rejected',
-    'pending': 'status-pending'
+    'WAITING': 'status-pending',
+    'IN_PROGRESS': 'status-in-progress',
+    'COMPLETED': 'status-approved',
+    'CANCELLED': 'status-rejected'
   }
-  return classes[status] || ''
+  return classes[statusCode] || 'status-pending'
 }
 
-const getStatusText = (status) => {
-  const texts = {
-    'approved': '已通过',
-    'rejected': '已拒绝',
-    'pending': '待审核'
+// 加载任务列表
+const loadTasks = async () => {
+  loading.value = true
+  try {
+    const response = await getTaskList(
+      currentPage.value, 
+      pageSize.value, 
+      props.searchQuery, 
+      props.statusFilter
+    )
+    if (response.code === 200) {
+      tasks.value = response.data.content || []
+      totalTasks.value = response.data.totalElements || 0
+    } else {
+      console.error('获取任务列表失败:', response.message)
+      tasks.value = []
+      totalTasks.value = 0
+    }
+  } catch (error) {
+    console.error('获取任务列表出错:', error)
+    tasks.value = []
+    totalTasks.value = 0
+  } finally {
+    loading.value = false
   }
-  return texts[status] || status
 }
 
-const previousPage = () => {
-  if (currentPage.value > 1) {
-    currentPage.value--
-  }
+// ElementUI分页事件处理
+const handleSizeChange = (newSize) => {
+  pageSize.value = newSize
+  currentPage.value = 1
+  loadTasks()
 }
 
-const nextPage = () => {
-  if (currentPage.value < totalPages.value) {
-    currentPage.value++
-  }
+const handleCurrentChange = (newPage) => {
+  currentPage.value = newPage
+  loadTasks()
 }
 
+// 任务操作处理
 const handleDetail = (task) => {
-  console.log('查看详情:', task)
+  console.log('查看任务详情:', task)
+  selectedTaskId.value = task.id
+  showDetailModal.value = true
 }
 
 const handleApprove = (task) => {
   console.log('通过任务:', task)
-  // Update task status
-  const taskIndex = tasks.value.findIndex(t => t.id === task.id)
-  if (taskIndex !== -1) {
-    tasks.value[taskIndex].status = 'approved'
-  }
+  // TODO: 实现任务审核通过逻辑
 }
 
 const handleReject = (task) => {
   console.log('拒绝任务:', task)
-  // Update task status
-  const taskIndex = tasks.value.findIndex(t => t.id === task.id)
-  if (taskIndex !== -1) {
-    tasks.value[taskIndex].status = 'rejected'
-  }
+  // TODO: 实现任务审核拒绝逻辑
 }
+
+// 监听分页参数变化
+watch([currentPage, pageSize], () => {
+  loadTasks()
+})
+
+// 监听筛选参数变化
+watch([() => props.searchQuery, () => props.statusFilter], () => {
+  currentPage.value = 1 // 重置到第一页
+  loadTasks()
+})
+
+// 组件挂载时加载数据
+onMounted(() => {
+  loadTasks()
+})
 </script>
 
 <style scoped>
@@ -180,30 +229,60 @@ const handleReject = (task) => {
 }
 
 .table-wrapper {
-  overflow-x: auto;
+  overflow-x: hidden;
+  width: 100%;
 }
 
 .task-table {
   width: 100%;
   border-collapse: collapse;
+  table-layout: fixed;
+  min-width: 1200px; /* 确保表格足够宽，避免换行 */
 }
 
 .task-table th {
   background: #f9fafb;
-  padding: 12px 16px;
+  padding: 18px 12px;
   text-align: left;
   font-weight: 500;
   color: #374151;
   font-size: 14px;
   border-bottom: 1px solid #e5e7eb;
+  white-space: nowrap;
 }
 
 .task-table td {
-  padding: 12px 16px;
+  padding: 24px 12px;
   border-bottom: 1px solid #f3f4f6;
   font-size: 14px;
   color: #1f2937;
+  vertical-align: top;
+  line-height: 1.6;
+  min-height: 60px;
 }
+
+/* 允许换行的列 */
+.task-table td:nth-child(2), /* 标题 */
+.task-table td:nth-child(8), /* 服务地址 */
+.task-table td:nth-child(9)  /* 发布时间 */
+{
+  white-space: normal;
+  word-wrap: break-word;
+  word-break: break-word;
+  line-height: 1.8;
+}
+
+/* 设置列宽 */
+.task-table th:nth-child(1), .task-table td:nth-child(1) { width: 80px; }  /* 任务ID */
+.task-table th:nth-child(2), .task-table td:nth-child(2) { width: 180px; } /* 标题 */
+.task-table th:nth-child(3), .task-table td:nth-child(3) { width: 100px; } /* 发布人 */
+.task-table th:nth-child(4), .task-table td:nth-child(4) { width: 120px; } /* 发布人电话 */
+.task-table th:nth-child(5), .task-table td:nth-child(5) { width: 80px; }  /* 暖币 */
+.task-table th:nth-child(6), .task-table td:nth-child(6) { width: 100px; } /* 状态 */
+.task-table th:nth-child(7), .task-table td:nth-child(7) { width: 100px; } /* 志愿者 */
+.task-table th:nth-child(8), .task-table td:nth-child(8) { width: 160px; } /* 服务地址 */
+.task-table th:nth-child(9), .task-table td:nth-child(9) { width: 140px; } /* 发布时间 */
+.task-table th:nth-child(10), .task-table td:nth-child(10) { width: 180px; } /* 操作 */
 
 .task-title {
   color: #3b82f6;
@@ -241,39 +320,52 @@ const handleReject = (task) => {
   font-weight: 500;
 }
 
-.pagination {
-  padding: 16px 24px;
+.status-in-progress {
+  background: #dbeafe;
+  color: #1e40af;
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+/* ElementUI分页样式 */
+.pagination-container {
+  padding: 20px 24px;
+  border-top: 1px solid #e5e7eb;
   display: flex;
   justify-content: center;
-  align-items: center;
-  gap: 16px;
-  border-top: 1px solid #e5e7eb;
 }
 
-.pagination-btn {
-  padding: 8px 16px;
+/* 自定义ElementUI分页样式 */
+.pagination-container :deep(.el-pagination) {
+  justify-content: center;
+}
+
+.pagination-container :deep(.el-pagination .btn-prev),
+.pagination-container :deep(.el-pagination .btn-next) {
   border: 1px solid #d1d5db;
-  background: white;
   border-radius: 6px;
-  cursor: pointer;
-  font-size: 14px;
-  transition: all 0.2s;
 }
 
-.pagination-btn:hover:not(:disabled) {
-  background: #f3f4f6;
+.pagination-container :deep(.el-pagination .el-pager li) {
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  margin: 0 4px;
+}
+
+.pagination-container :deep(.el-pagination .el-pager li.active) {
+  background-color: #3b82f6;
+  color: white;
+  border-color: #3b82f6;
+}
+
+.pagination-container :deep(.el-pagination .el-pager li:hover) {
   border-color: #9ca3af;
 }
 
-.pagination-btn:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-.page-info {
-  font-size: 14px;
-  color: #6b7280;
-  min-width: 20px;
-  text-align: center;
+.pagination-container :deep(.el-pagination .el-pager li.active:hover) {
+  background-color: #2563eb;
+  border-color: #2563eb;
 }
 </style>

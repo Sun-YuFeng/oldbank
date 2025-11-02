@@ -12,29 +12,38 @@
     <!-- 搜索框 -->
     <div class="search-section">
       <div class="search-container">
-        <input 
-          type="text" 
+        <el-input
           v-model="searchKeyword"
           placeholder="搜索投诉内容、投诉人..."
           class="search-input"
-        />
-        <button class="search-button">
-          <i class="fa fa-search"></i>
-        </button>
+          clearable
+          @input="handleSearch"
+        >
+          <template #append>
+            <el-button @click="handleSearch">
+              <i class="fa fa-search"></i>
+            </el-button>
+          </template>
+        </el-input>
       </div>
     </div>
 
+    <!-- 加载状态 -->
+    <div v-if="loading" class="loading-container">
+      <el-skeleton :rows="5" animated />
+    </div>
+
     <!-- 投诉列表 -->
-    <div class="complaint-list">
+    <div v-else class="complaint-list">
       <div 
-        v-for="complaint in filteredComplaints" 
+        v-for="complaint in complaintList" 
         :key="complaint.id"
         class="complaint-card"
       >
         <div class="complaint-content">
           <!-- 左侧图片 -->
           <div class="complaint-image">
-            <img :src="complaint.image" :alt="complaint.title" />
+            <img :src="complaint.image || '/src/assets/background.png'" :alt="complaint.title" />
           </div>
           
           <!-- 中间内容 -->
@@ -44,57 +53,54 @@
             <div class="complaint-meta">
               <span class="complaint-author">投诉人：{{ complaint.author }}</span>
               <span class="complaint-time">投诉时间：{{ complaint.time }}</span>
+              <el-tag 
+                :type="getStatusType(complaint.status)"
+                size="small"
+                class="status-tag"
+              >
+                {{ getStatusText(complaint.status) }}
+              </el-tag>
             </div>
           </div>
           
           <!-- 右侧处理按钮 -->
           <div class="complaint-actions">
-            <button 
-              class="handle-button"
+            <el-button 
+              type="primary"
               @click="handleComplaint(complaint.id)"
+              :disabled="complaint.status === 'resolved'"
             >
-              处理
-            </button>
+              {{ complaint.status === 'resolved' ? '已处理' : '处理' }}
+            </el-button>
           </div>
         </div>
       </div>
+
+      <!-- 空状态 -->
+      <div v-if="complaintList.length === 0" class="empty-state">
+        <el-empty description="暂无投诉数据" />
+      </div>
     </div>
 
-    <!-- 分页组件 -->
-    <div class="pagination-container" v-if="totalPages > 1">
-      <div class="pagination">
-        <button 
-          class="pagination-btn" 
-          :disabled="currentPage === 1"
-          @click="changePage(currentPage - 1)"
-        >
-          上一页
-        </button>
-        
-        <div class="page-numbers">
-          <button 
-            v-for="page in totalPages" 
-            :key="page"
-            :class="['page-btn', { active: page === currentPage }]"
-            @click="changePage(page)"
-          >
-            {{ page }}
-          </button>
-        </div>
-        
-        <button 
-          class="pagination-btn" 
-          :disabled="currentPage === totalPages"
-          @click="changePage(currentPage + 1)"
-        >
-          下一页
-        </button>
-      </div>
+    <!-- ElementUI分页组件 -->
+    <div class="pagination-container" v-if="total > pageSize">
+      <el-pagination
+        v-model:current-page="currentPage"
+        v-model:page-size="pageSize"
+        :page-sizes="[10, 20, 50, 100]"
+        :total="total"
+        layout="total, sizes, prev, pager, next, jumper"
+        @size-change="handleSizeChange"
+        @current-change="handleCurrentChange"
+      />
     </div>
   </div>
 </template>
 
 <script>
+import { getComplaintList } from '@/utils/api'
+import { ElMessage } from 'element-plus'
+
 export default {
   name: 'ComplaintManagementPage',
   data() {
@@ -102,14 +108,57 @@ export default {
       searchKeyword: '',
       currentPage: 1,
       pageSize: 10,
-      complaints: [
+      total: 0,
+      complaintList: [],
+      loading: false,
+      searchTimer: null
+    }
+  },
+  computed: {
+    totalPages() {
+      return Math.ceil(this.total / this.pageSize)
+    }
+  },
+  mounted() {
+    this.fetchComplaintList()
+  },
+  methods: {
+    // 获取投诉列表
+    async fetchComplaintList() {
+      this.loading = true
+      try {
+        const response = await getComplaintList(this.currentPage, this.pageSize, this.searchKeyword)
+        
+        if (response.code === 200) {
+          // 适配后端返回的数据结构
+          this.complaintList = response.data.content || []
+          this.total = response.data.totalElements || 0
+        } else {
+          ElMessage.error(response.message || '获取投诉列表失败')
+        }
+      } catch (error) {
+        console.error('获取投诉列表失败:', error)
+        ElMessage.error('获取投诉列表失败，请检查网络连接')
+        // 开发环境下使用模拟数据
+        if (import.meta.env.DEV) {
+          this.useMockData()
+        }
+      } finally {
+        this.loading = false
+      }
+    },
+
+    // 开发环境下的模拟数据
+    useMockData() {
+      this.complaintList = [
         {
           id: 1,
           title: '服务态度差',
           description: '志愿者服务态度非常差，对老人不尊重，希望加强培训',
           author: '张大爷',
           time: '2025-08-20 14:30',
-          image: '/src/assets/background.png'
+          image: '/src/assets/background.png',
+          status: 'pending'
         },
         {
           id: 2,
@@ -117,106 +166,60 @@ export default {
           description: '志愿者承诺完成任务但迟迟未完成，影响正常生活',
           author: '李阿姨',
           time: '2025-08-19 09:15',
-          image: '/src/assets/background.png'
-        },
-        {
-          id: 3,
-          title: '设备损坏',
-          description: '社区提供的助老设备损坏严重，需要维修',
-          author: '王叔叔',
-          time: '2025-08-18 16:45',
-          image: '/src/assets/background.png'
-        },
-        {
-          id: 4,
-          title: '积分计算错误',
-          description: '完成任务后积分计算有误，少计算了20分',
-          author: '赵奶奶',
-          time: '2025-08-17 11:20',
-          image: '/src/assets/background.png'
-        },
-        {
-          id: 5,
-          title: '系统登录问题',
-          description: '无法正常登录系统，提示密码错误但密码正确',
-          author: '钱爷爷',
-          time: '2025-08-16 13:10',
-          image: '/src/assets/background.png'
-        },
-        {
-          id: 6,
-          title: '任务分配不公',
-          description: '任务分配存在明显偏向，部分志愿者任务过多',
-          author: '孙阿姨',
-          time: '2025-08-15 10:05',
-          image: '/src/assets/background.png'
-        },
-        {
-          id: 7,
-          title: '信息更新延迟',
-          description: '个人信息更新后系统显示延迟，影响使用',
-          author: '周叔叔',
-          time: '2025-08-14 15:30',
-          image: '/src/assets/background.png'
-        },
-        {
-          id: 8,
-          title: '通知未收到',
-          description: '重要系统通知未收到，错过重要活动',
-          author: '吴大爷',
-          time: '2025-08-13 08:45',
-          image: '/src/assets/background.png'
-        },
-        {
-          id: 9,
-          title: '积分兑换问题',
-          description: '积分兑换商品时系统卡顿，无法完成兑换',
-          author: '郑奶奶',
-          time: '2025-08-12 14:20',
-          image: '/src/assets/background.png'
-        },
-        {
-          id: 10,
-          title: '志愿者培训不足',
-          description: '新志愿者培训不足，服务过程中出现问题',
-          author: '冯阿姨',
-          time: '2025-08-11 11:15',
-          image: '/src/assets/background.png'
+          image: '/src/assets/background.png',
+          status: 'resolved'
         }
       ]
-    }
-  },
-  computed: {
-    filteredComplaints() {
-      let filtered = this.complaints
-      
-      // 搜索过滤
-      if (this.searchKeyword) {
-        const keyword = this.searchKeyword.toLowerCase()
-        filtered = filtered.filter(complaint => 
-          complaint.title.toLowerCase().includes(keyword) ||
-          complaint.description.toLowerCase().includes(keyword) ||
-          complaint.author.toLowerCase().includes(keyword)
-        )
+      this.total = 2
+    },
+
+    // 处理搜索
+    handleSearch() {
+      // 防抖处理，避免频繁请求
+      if (this.searchTimer) {
+        clearTimeout(this.searchTimer)
       }
       
-      // 分页
-      const startIndex = (this.currentPage - 1) * this.pageSize
-      const endIndex = startIndex + this.pageSize
-      return filtered.slice(startIndex, endIndex)
+      this.searchTimer = setTimeout(() => {
+        this.currentPage = 1
+        this.fetchComplaintList()
+      }, 500)
     },
-    totalPages() {
-      return Math.ceil(this.complaints.length / this.pageSize)
-    }
-  },
-  methods: {
+
+    // 处理投诉
     handleComplaint(id) {
       this.$router.push(`/complaint-management/${id}`)
     },
-    changePage(page) {
-      if (page >= 1 && page <= this.totalPages) {
-        this.currentPage = page
+
+    // 分页大小改变
+    handleSizeChange(newSize) {
+      this.pageSize = newSize
+      this.currentPage = 1
+      this.fetchComplaintList()
+    },
+
+    // 当前页改变
+    handleCurrentChange(newPage) {
+      this.currentPage = newPage
+      this.fetchComplaintList()
+    },
+
+    // 获取状态类型
+    getStatusType(status) {
+      const statusMap = {
+        'pending': 'warning',
+        'resolved': 'success'
       }
+      return statusMap[status] || 'info'
+    },
+
+    // 获取状态文本
+    getStatusText(status) {
+      const statusMap = {
+        'pending': '待处理',
+        'resolved': '已处理'
+      }
+      return statusMap[status] || '未知'
     }
   }
 }
@@ -261,33 +264,11 @@ export default {
 }
 
 .search-container {
-  display: flex;
   max-width: 400px;
-  background: white;
-  border-radius: 8px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-  overflow: hidden;
 }
 
-.search-input {
-  flex: 1;
-  padding: 12px 16px;
-  border: none;
-  outline: none;
-  font-size: 14px;
-}
-
-.search-button {
-  padding: 12px 16px;
-  background: #3b82f6;
-  border: none;
-  color: white;
-  cursor: pointer;
-  transition: background 0.2s ease;
-}
-
-.search-button:hover {
-  background: #2563eb;
+.loading-container {
+  margin: 20px 0;
 }
 
 .complaint-list {
@@ -358,90 +339,27 @@ export default {
   gap: 16px;
   font-size: 12px;
   color: #94a3b8;
+  align-items: center;
+}
+
+.status-tag {
+  margin-left: 8px;
 }
 
 .complaint-actions {
   flex-shrink: 0;
 }
 
-.handle-button {
-  padding: 8px 16px;
-  background: #3b82f6;
-  color: white;
-  border: none;
-  border-radius: 6px;
-  font-size: 14px;
-  font-weight: 500;
-  cursor: pointer;
-  transition: background 0.2s ease;
+.empty-state {
+  margin: 40px 0;
 }
 
-.handle-button:hover {
-  background: #2563eb;
-}
-
-/* 分页样式 */
+/* ElementUI分页样式 */
 .pagination-container {
   margin-top: 24px;
   padding: 20px 0;
   display: flex;
   justify-content: center;
-}
-
-.pagination {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.pagination-btn {
-  padding: 8px 16px;
-  border: 1px solid #d1d5db;
-  background: white;
-  border-radius: 6px;
-  font-size: 14px;
-  color: #374151;
-  cursor: pointer;
-  transition: all 0.2s ease;
-}
-
-.pagination-btn:hover:not(:disabled) {
-  background: #f3f4f6;
-  border-color: #9ca3af;
-}
-
-.pagination-btn:disabled {
-  color: #9ca3af;
-  cursor: not-allowed;
-  background: #f9fafb;
-}
-
-.page-numbers {
-  display: flex;
-  gap: 4px;
-}
-
-.page-btn {
-  padding: 8px 12px;
-  border: 1px solid #d1d5db;
-  background: white;
-  border-radius: 6px;
-  font-size: 14px;
-  color: #374151;
-  cursor: pointer;
-  transition: all 0.2s ease;
-  min-width: 40px;
-}
-
-.page-btn:hover {
-  background: #f3f4f6;
-  border-color: #9ca3af;
-}
-
-.page-btn.active {
-  background: #3b82f6;
-  border-color: #3b82f6;
-  color: white;
 }
 
 @media (max-width: 768px) {
@@ -462,19 +380,12 @@ export default {
   .complaint-meta {
     flex-direction: column;
     gap: 4px;
+    align-items: flex-start;
   }
   
-  .pagination {
-    flex-wrap: wrap;
-    justify-content: center;
-    gap: 4px;
-  }
-  
-  .page-numbers {
-    order: -1;
-    width: 100%;
-    justify-content: center;
-    margin-bottom: 8px;
+  .status-tag {
+    margin-left: 0;
+    margin-top: 4px;
   }
 }
 </style>

@@ -51,7 +51,7 @@
       <div class="list-header">
         <h3 class="list-title">用户列表</h3>
         <div class="list-info">
-          <span class="info-text">共 {{ paginationData.totalElements || 0 }} 位用户，当前显示 {{ startIndex }}-{{ endIndex }} 位</span>
+          <span class="info-text">共 {{ totalElements || 0 }} 位用户，当前显示 {{ startIndex }}-{{ endIndex }} 位</span>
         </div>
       </div>
 
@@ -89,34 +89,17 @@
         </table>
       </div>
 
-      <!-- 分页组件 -->
+      <!-- Element Plus 分页组件 -->
       <div class="pagination-container">
-        <div class="pagination">
-          <button 
-            class="pagination-btn" 
-            :class="{ 'pagination-btn-disabled': paginationData.first || paginationData.totalPages === 0, 'pagination-btn-active': !paginationData.first && paginationData.totalPages > 0 }"
-            :disabled="paginationData.first || paginationData.totalPages === 0"
-            @click="changePage(paginationData.pageNumber - 1)"
-          >
-            上一页
-          </button>
-          
-          <div class="page-info">
-            第 {{ currentPage }} 页 / 共 {{ paginationData.totalPages || 0 }} 页
-            <span v-if="paginationData.totalElements > 0" class="total-elements">
-              (共 {{ paginationData.totalElements }} 条数据)
-            </span>
-          </div>
-          
-          <button 
-            class="pagination-btn" 
-            :class="{ 'pagination-btn-disabled': paginationData.last || paginationData.totalPages === 0, 'pagination-btn-active': !paginationData.last && paginationData.totalPages > 0 }"
-            :disabled="paginationData.last || paginationData.totalPages === 0"
-            @click="changePage(paginationData.pageNumber + 1)"
-          >
-            下一页
-          </button>
-        </div>
+        <el-pagination
+          v-model:current-page="currentPage"
+          :page-size="pageSize"
+          :total="totalElements"
+          :page-sizes="[9, 20, 50, 100]"
+          layout="total, sizes, prev, pager, next, jumper"
+          @size-change="handleSizeChange"
+          @current-change="handleCurrentChange"
+        />
       </div>
     </div>
   </div>
@@ -130,16 +113,9 @@ export default {
   data() {
     return {
       userList: [],
-      paginationData: {
-        content: [],
-        totalElements: 0,
-        totalPages: 0,
-        pageNumber: 0,
-        pageSize: 10,
-        first: true,
-        last: false,
-        empty: false
-      },
+      currentPage: 1,
+      pageSize: 9,
+      totalElements: 0,
       loading: false,
       searchQuery: '',
       roleFilter: '',
@@ -149,127 +125,57 @@ export default {
   },
   computed: {
     startIndex() {
-      // 后端返回0-based页码，前端显示1-based页码
-      const pageNum = (this.paginationData.pageNumber || 0) + 1
-      const pageSize = this.paginationData.pageSize || 10
-      const totalElements = this.paginationData.totalElements || 0
-      
-      if (totalElements === 0) return 0
-      return (pageNum - 1) * pageSize + 1
+      if (this.totalElements === 0) return 0
+      return (this.currentPage - 1) * this.pageSize + 1
     },
     endIndex() {
-      // 后端返回0-based页码，前端显示1-based页码
-      const pageNum = (this.paginationData.pageNumber || 0) + 1
-      const pageSize = this.paginationData.pageSize || 10
-      const totalElements = this.paginationData.totalElements || 0
-      
-      if (totalElements === 0) return 0
-      const end = pageNum * pageSize
-      return end > totalElements ? totalElements : end
-    },
-    currentPage() {
-      // 后端返回0-based页码，前端显示1-based页码
-      return (this.paginationData.pageNumber || 0) + 1
-    },
-    visiblePages() {
-      const currentPage = this.currentPage
-      const totalPages = this.paginationData.totalPages || 0
-      const pages = []
-      
-      if (totalPages === 0) return pages
-      
-      // 智能分页逻辑：显示1，2，3...n，中间显示...
-      const maxVisiblePages = 7 // 最多显示7个页码
-      
-      if (totalPages <= maxVisiblePages) {
-        // 总页数较少，显示所有页码
-        for (let i = 1; i <= totalPages; i++) {
-          pages.push(i)
-        }
-      } else {
-        // 总页数较多，使用智能分页
-        const startPage = Math.max(1, currentPage - 2)
-        const endPage = Math.min(totalPages, currentPage + 2)
-        
-        // 始终显示第一页
-        pages.push(1)
-        
-        // 如果当前页离第一页较远，显示省略号
-        if (startPage > 2) {
-          pages.push('...')
-        }
-        
-        // 显示当前页附近的页码
-        for (let i = startPage; i <= endPage; i++) {
-          if (i > 1 && i < totalPages) {
-            pages.push(i)
-          }
-        }
-        
-        // 如果当前页离最后一页较远，显示省略号
-        if (endPage < totalPages - 1) {
-          pages.push('...')
-        }
-        
-        // 始终显示最后一页
-        if (totalPages > 1) {
-          pages.push(totalPages)
-        }
-      }
-      
-      return pages
+      if (this.totalElements === 0) return 0
+      const end = this.currentPage * this.pageSize
+      return end > this.totalElements ? this.totalElements : end
     }
   },
   async mounted() {
-    await this.fetchUserCount()
-    await this.fetchUserList(1) // 从第1页开始
+    await this.fetchUserList()
   },
   methods: {
-    async fetchUserCount() {
-      try {
-        const response = await getUserCount(false) // 不包含已删除用户
-        if (response.code === 200) {
-          // 根据用户总数计算总页数（每页10条数据）
-          const totalElements = response.data
-          const totalPages = Math.ceil(totalElements / this.paginationData.pageSize)
-          
-          // 更新分页数据
-          this.paginationData.totalElements = totalElements
-          this.paginationData.totalPages = totalPages
-          
-          console.log('用户总数:', totalElements, '总页数:', totalPages)
-        }
-      } catch (error) {
-        console.error('获取用户总数失败:', error)
-        
-        // 如果是401错误，跳转到登录页
-        if (error.code === 401) {
-          alert('登录已过期，请重新登录')
-          this.$router.push('/login')
-          return
-        }
-        
-        // 其他错误使用默认值
-        this.paginationData.totalElements = 0
-        this.paginationData.totalPages = 0
-      }
-    },
-    
-    // 基础分页：不传递参数，查询所有用户
-    async fetchUserList(pageNumber = 0) {
+    // 统一的数据获取方法
+    async fetchUserList() {
       this.loading = true
       try {
-        // 后端API使用1-based页码，所以需要将0-based转换为1-based
-        const response = await getUserList(pageNumber + 1, this.paginationData.pageSize)
+        // 始终使用带参数的方法，传递空的搜索和筛选参数
+        const response = await getUserListWithFilters(
+          this.currentPage, 
+          this.pageSize,
+          this.searchQuery,
+          this.roleFilter,
+          this.statusFilter
+        )
+        
         console.log('获取用户列表响应:', response)
         if (response.code === 200) {
+          // 根据接口文档修正字段名
           this.userList = response.data.content || []
-          this.paginationData = {
-            ...response.data,
-            pageNumber: pageNumber // 使用传入的0-based页码
+          
+          // 修正后端返回的totalElements问题：如果有搜索或筛选条件，使用实际返回的数据条数
+          if (this.hasSearchOrFilter()) {
+            // 有搜索条件时，使用实际返回的数据条数作为totalElements
+            this.totalElements = this.userList.length
+          } else {
+            // 没有搜索条件时，使用后端返回的totalElements
+            this.totalElements = response.data.totalElements || 0
           }
+          
+          // 检查当前页码是否超出范围，如果超出则重置到第一页
+          const totalPages = Math.ceil(this.totalElements / this.pageSize)
+          if (this.currentPage > totalPages && totalPages > 0) {
+            this.currentPage = 1
+            // 重新获取数据
+            await this.fetchUserList()
+            return
+          }
+          
           console.log('更新后的用户列表:', this.userList)
-          console.log('更新后的分页数据:', this.paginationData)
+          console.log('更新后的分页数据:', { currentPage: this.currentPage, pageSize: this.pageSize, totalElements: this.totalElements })
         }
       } catch (error) {
         console.error('获取用户列表失败:', error)
@@ -283,68 +189,22 @@ export default {
         
         // 其他错误显示空数据
         this.userList = []
-        this.paginationData = {
-          content: [],
-          totalElements: 0,
-          totalPages: 0,
-          pageNumber: 0,
-          pageSize: 10,
-          first: true,
-          last: true,
-          empty: true
-        }
+        this.totalElements = 0
       } finally {
         this.loading = false
       }
     },
     
-    // 搜索/筛选分页：传递参数，查询符合条件的用户
-    async fetchUserListWithFilters(pageNumber = 0) {
-      this.loading = true
-      try {
-        // 后端API使用1-based页码，所以需要将0-based转换为1-based
-        const response = await getUserListWithFilters(
-          pageNumber + 1, 
-          this.paginationData.pageSize,
-          this.searchQuery,
-          this.roleFilter,
-          this.statusFilter
-        )
-        console.log('获取用户列表响应（带参数）:', response)
-        if (response.code === 200) {
-          this.userList = response.data.content || []
-          this.paginationData = {
-            ...response.data,
-            pageNumber: pageNumber // 使用传入的0-based页码
-          }
-          console.log('更新后的用户列表（带参数）:', this.userList)
-          console.log('更新后的分页数据（带参数）:', this.paginationData)
-        }
-      } catch (error) {
-        console.error('获取用户列表失败（带参数）:', error)
-        
-        // 如果是401错误，跳转到登录页
-        if (error.code === 401) {
-          alert('登录已过期，请重新登录')
-          this.$router.push('/login')
-          return
-        }
-        
-        // 其他错误显示空数据
-        this.userList = []
-        this.paginationData = {
-          content: [],
-          totalElements: 0,
-          totalPages: 0,
-          pageNumber: 0,
-          pageSize: 10,
-          first: true,
-          last: true,
-          empty: true
-        }
-      } finally {
-        this.loading = false
-      }
+    // Element Plus 分页事件处理
+    handleSizeChange(newSize) {
+      this.pageSize = newSize
+      this.currentPage = 1 // 重置到第一页
+      this.fetchUserList()
+    },
+    
+    handleCurrentChange(newPage) {
+      this.currentPage = newPage
+      this.fetchUserList()
     },
     
     getLoginStatusText(status) {
@@ -365,40 +225,15 @@ export default {
       return 'status-long-time-login'
     },
     
-    changePage(pageNumber) {
-      // 后端API使用1-based页码，但前端内部使用0-based页码
-      // 页码范围应该是0到totalPages-1
-      if (pageNumber >= 0 && pageNumber < this.paginationData.totalPages) {
-        // 根据是否有搜索/筛选条件选择调用哪个方法
-        if (this.hasSearchOrFilter()) {
-          this.fetchUserListWithFilters(pageNumber)
-        } else {
-          this.fetchUserList(pageNumber)
-        }
-      }
-    },
-    
     // 检查是否有搜索或筛选条件
     hasSearchOrFilter() {
       return this.searchQuery.trim() !== '' || this.roleFilter !== '' || this.statusFilter !== ''
     },
     
-
-    
-
-    
-    performSearchAndFilter() {
-      // 重置到第一页进行搜索和筛选，使用带参数的分页方法
-      // 搜索时不需要调用fetchUserCount，因为搜索结果会返回正确的分页信息
-      this.fetchUserListWithFilters(0)
-    },
-    
     handleSearchButton() {
-      // 立即执行搜索，无需防抖
-      if (this.searchTimer) {
-        clearTimeout(this.searchTimer)
-      }
-      this.performSearchAndFilter()
+      // 重置到第一页进行搜索
+      this.currentPage = 1
+      this.fetchUserList()
     },
     
     handleReset() {
@@ -407,9 +242,9 @@ export default {
       this.roleFilter = ''
       this.statusFilter = ''
       
-      // 重置到第一页，并重新获取默认的用户总数
-      this.fetchUserCount()
-      this.fetchUserList(0)
+      // 重置到第一页并重新获取数据
+      this.currentPage = 1
+      this.fetchUserList()
     }
   }
 }
@@ -731,7 +566,7 @@ export default {
   background-color: #dc2626;
 }
 
-/* 分页样式 */
+/* Element Plus 分页样式 */
 .pagination-container {
   padding: 20px 24px;
   border-top: 1px solid #e2e8f0;
@@ -739,91 +574,36 @@ export default {
   justify-content: center;
 }
 
-.pagination {
-  display: flex;
-  align-items: center;
-  gap: 8px;
+/* 自定义 Element Plus 分页样式 */
+.pagination-container :deep(.el-pagination) {
+  justify-content: center;
 }
 
-.pagination-btn {
-  padding: 8px 16px;
+.pagination-container :deep(.el-pagination .btn-prev),
+.pagination-container :deep(.el-pagination .btn-next) {
   border: 1px solid #d1d5db;
-  background: white;
   border-radius: 6px;
-  font-size: 14px;
-  color: #374151;
-  cursor: pointer;
-  transition: all 0.2s ease;
 }
 
-.pagination-btn:hover:not(:disabled) {
-  background: #f3f4f6;
+.pagination-container :deep(.el-pagination .el-pager li) {
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  margin: 0 4px;
+}
+
+.pagination-container :deep(.el-pagination .el-pager li.active) {
+  background-color: #3b82f6;
+  color: white;
+  border-color: #3b82f6;
+}
+
+.pagination-container :deep(.el-pagination .el-pager li:hover) {
   border-color: #9ca3af;
 }
 
-.pagination-btn:disabled {
-  color: #9ca3af;
-  cursor: not-allowed;
-  background: #f9fafb;
-}
-
-.page-info {
-  font-size: 14px;
-  color: #6b7280;
-  font-weight: 500;
-  padding: 0 16px;
-}
-
-.total-elements {
-  font-size: 12px;
-  color: #9ca3af;
-  margin-left: 8px;
-}
-
-/* 分页按钮激活状态 */
-.pagination-btn-active {
-  background-color: #3b82f6 !important;
-  color: white !important;
-  border-color: #3b82f6 !important;
-}
-
-.pagination-btn-active:hover {
-  background-color: #2563eb !important;
-  border-color: #2563eb !important;
-}
-
-/* 分页按钮禁用状态 */
-.pagination-btn-disabled {
-  background-color: #f9fafb !important;
-  color: #9ca3af !important;
-  border-color: #d1d5db !important;
-  cursor: not-allowed !important;
-}
-
-.total-elements {
-  font-size: 12px;
-  color: #9ca3af;
-  margin-left: 8px;
-}
-
-/* 分页按钮激活状态 */
-.pagination-btn-active {
-  background-color: #3b82f6 !important;
-  color: white !important;
-  border-color: #3b82f6 !important;
-}
-
-.pagination-btn-active:hover {
-  background-color: #2563eb !important;
-  border-color: #2563eb !important;
-}
-
-/* 分页按钮禁用状态 */
-.pagination-btn-disabled {
-  background-color: #f9fafb !important;
-  color: #9ca3af !important;
-  border-color: #d1d5db !important;
-  cursor: not-allowed !important;
+.pagination-container :deep(.el-pagination .el-pager li.active:hover) {
+  background-color: #2563eb;
+  border-color: #2563eb;
 }
 
 @media (max-width: 768px) {
@@ -847,13 +627,13 @@ export default {
     gap: 4px;
   }
   
-  .pagination {
+  .pagination-container :deep(.el-pagination) {
     flex-wrap: wrap;
     justify-content: center;
     gap: 4px;
   }
   
-  .page-numbers {
+  .pagination-container :deep(.el-pagination .el-pager) {
     order: -1;
     width: 100%;
     justify-content: center;

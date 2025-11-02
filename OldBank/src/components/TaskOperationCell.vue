@@ -50,18 +50,22 @@ const handleReject = () => {
 <style scoped>
 .operation-buttons {
   display: flex;
-  gap: 8px;
+  gap: 6px;
   align-items: center;
+  flex-wrap: nowrap;
+  min-width: 120px;
 }
 
 .btn {
-  padding: 6px 12px;
+  padding: 4px 8px;
   border: none;
-  border-radius: 4px;
-  font-size: 12px;
+  border-radius: 3px;
+  font-size: 11px;
   cursor: pointer;
   transition: all 0.2s;
   font-weight: 500;
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 
 .btn-detail {

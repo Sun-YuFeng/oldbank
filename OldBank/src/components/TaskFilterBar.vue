@@ -15,9 +15,10 @@
     <div class="filter-section">
       <select v-model="selectedStatus" class="status-select">
         <option value="">全部状态</option>
-        <option value="pending">待审核</option>
-        <option value="approved">已通过</option>
-        <option value="rejected">已拒绝</option>
+        <option value="WAITING">待接单</option>
+        <option value="IN_PROGRESS">进行中</option>
+        <option value="COMPLETED">已完成</option>
+        <option value="CANCELLED">已取消</option>
       </select>
     </div>
   </div>

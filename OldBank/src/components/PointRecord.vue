@@ -69,18 +69,17 @@
       </table>
     </div>
 
-    <div class="pagination-section">
-      <button class="page-btn" :disabled="currentPage === 1">上一页</button>
-      <button 
-        v-for="page in totalPages" 
-        :key="page"
-        class="page-number"
-        :class="{ active: page === currentPage }"
-        @click="currentPage = page"
-      >
-        {{ page }}
-      </button>
-      <button class="page-btn" :disabled="currentPage === totalPages">下一页</button>
+    <!-- ElementUI分页组件 -->
+    <div class="pagination-container" v-if="records.length >= pageSize">
+      <el-pagination
+        v-model:current-page="currentPage"
+        v-model:page-size="pageSize"
+        :total="records.length"
+        :page-sizes="[10, 20, 50, 100]"
+        layout="total, sizes, prev, pager, next, jumper"
+        @size-change="handleSizeChange"
+        @current-change="handleCurrentChange"
+      />
     </div>
   </div>
 </template>
@@ -95,7 +94,7 @@ const filters = reactive({
 })
 
 const currentPage = ref(1)
-const totalPages = ref(5)
+const pageSize = ref(10)
 
 const records = ref([
   {
@@ -189,6 +188,16 @@ const records = ref([
     time: '2025/7/27 20:26:24'
   }
 ])
+
+// ElementUI分页事件处理
+const handleSizeChange = (newSize) => {
+  pageSize.value = newSize
+  currentPage.value = 1
+}
+
+const handleCurrentChange = (newPage) => {
+  currentPage.value = newPage
+}
 </script>
 
 <style scoped>
@@ -300,39 +309,43 @@ const records = ref([
   font-weight: 500;
 }
 
-.pagination-section {
+/* ElementUI分页样式 */
+.pagination-container {
+  margin-top: 20px;
+  padding: 20px 0;
   display: flex;
   justify-content: center;
-  align-items: center;
-  gap: 8px;
-  box-sizing: border-box;
 }
 
-.page-btn,
-.page-number {
-  padding: 8px 12px;
-  border: 1px solid #ddd;
-  background: white;
-  color: #666;
-  border-radius: 4px;
-  cursor: pointer;
-  font-size: 14px;
-  box-sizing: border-box;
+/* 自定义ElementUI分页样式 */
+.pagination-container :deep(.el-pagination) {
+  justify-content: center;
 }
 
-.page-btn:hover:not(:disabled),
-.page-number:hover {
-  background: #f8f9fa;
+.pagination-container :deep(.el-pagination .btn-prev),
+.pagination-container :deep(.el-pagination .btn-next) {
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
 }
 
-.page-btn:disabled {
-  color: #ccc;
-  cursor: not-allowed;
+.pagination-container :deep(.el-pagination .el-pager li) {
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  margin: 0 4px;
 }
 
-.page-number.active {
-  background: #3498db;
+.pagination-container :deep(.el-pagination .el-pager li.active) {
+  background-color: #3b82f6;
   color: white;
-  border-color: #3498db;
+  border-color: #3b82f6;
+}
+
+.pagination-container :deep(.el-pagination .el-pager li:hover) {
+  border-color: #9ca3af;
+}
+
+.pagination-container :deep(.el-pagination .el-pager li.active:hover) {
+  background-color: #2563eb;
+  border-color: #2563eb;
 }
 </style>

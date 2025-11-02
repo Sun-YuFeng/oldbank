@@ -148,20 +148,20 @@ export const getCurrentAdmin = () => {
 }
 
 // 获取用户列表（基础版，不传递搜索筛选参数）
-export const getUserList = (pageNumber = 1, pageSize = 10) => {
+export const getUserList = (pageNumber = 1, pageSize = 9) => {
   return api.get('/api/users', {
     params: {
       page: pageNumber,
-      size: pageSize
+      pageSize: pageSize
     }
   })
 }
 
 // 获取用户列表（完整版，可传递搜索和筛选参数）
-export const getUserListWithFilters = (pageNumber = 1, pageSize = 10, searchQuery = '', roleFilter = '', statusFilter = '') => {
+export const getUserListWithFilters = (pageNumber = 1, pageSize = 9, searchQuery = '', roleFilter = '', statusFilter = '') => {
   const params = {
     page: pageNumber,
-    size: pageSize
+    pageSize: pageSize
   }
   
   // 只有当参数有值时才添加到请求中
@@ -213,6 +213,83 @@ export const getStatusStats = () => {
 // 获取仪表盘统计数据
 export const getDashboardStats = () => {
   return api.get('/api/dashboard/stats')
+}
+
+// 投诉管理API
+
+// 获取投诉列表（分页、搜索）
+export const getComplaintList = (page = 1, pageSize = 10, search = '') => {
+  const params = {
+    page,
+    pageSize
+  }
+  
+  // 只有当搜索关键字有值时才添加到请求中
+  if (search && search.trim() !== '') {
+    params.search = search.trim()
+  }
+  
+  return api.get('/api/complaints', {
+    params
+  })
+}
+
+// 处理投诉
+export const handleComplaint = (id, result, handler) => {
+  return api.post(`/api/complaints/${id}/handle`, {
+    result,
+    handler
+  })
+}
+
+// 获取投诉详情
+export const getComplaintDetail = (id) => {
+  return api.get(`/api/complaints/${id}`)
+}
+
+// 任务管理API
+
+// 获取任务列表（分页、搜索、状态筛选）
+export const getTaskList = (page = 1, pageSize = 10, search = '', status = '', type = '') => {
+  const params = {
+    page,
+    pageSize
+  }
+  
+  // 只有当参数有值时才添加到请求中
+  if (search && search.trim() !== '') {
+    params.search = search.trim()
+  }
+  
+  if (status && status !== '') {
+    params.status = status
+  }
+  
+  if (type && type !== '') {
+    params.type = type
+  }
+  
+  return api.get('/api/admin/demands', {
+    params
+  })
+}
+
+// 获取任务详情
+export const getTaskDetail = (id) => {
+  return api.get(`/api/admin/demands/${id}`)
+}
+
+// 审核任务
+export const approveTask = (id, approvalStatus, remark = '') => {
+  return api.post(`/api/admin/demands/${id}/approve`, {
+    approvalStatus,
+    remark
+  })
+}
+
+// 获取任务统计信息
+export const getTaskStats = () => {
+  return api.get('/api/admin/demands/stats')
 }
 
 export default api
