@@ -72,6 +72,13 @@ const router = createRouter({
       // 懒加载账号管理页面
       component: () => import('../views/AccountManagementPage.vue'),
       meta: { requiresAuth: true }
+    },
+    {
+      path: '/volunteer/:id',
+      name: 'VolunteerDetail',
+      // 懒加载志愿者详情页面
+      component: () => import('../views/VolunteerDetailPage.vue'),
+      meta: { requiresAuth: true }
     }
   ],
 })

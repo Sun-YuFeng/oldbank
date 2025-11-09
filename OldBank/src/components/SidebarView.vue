@@ -7,36 +7,43 @@
       <ul class="nav-list">
         <li>
           <router-link to="/" class="nav-item" active-class="active">
+            <i class="uil uil-dashboard nav-icon"></i>
             <span>仪表盘</span>
           </router-link>
         </li>
         <li>
           <router-link to="/user-management" class="nav-item" active-class="active">
+            <i class="uil uil-users-alt nav-icon"></i>
             <span>用户管理</span>
           </router-link>
         </li>
         <li>
           <router-link to="/task-approval" class="nav-item" active-class="active">
+            <i class="uil uil-clipboard-alt nav-icon"></i>
             <span>任务审核</span>
           </router-link>
         </li>
         <li>
            <router-link to="/points-management" class="nav-item" active-class="active">
+            <i class="uil uil-coins nav-icon"></i>
             <span>积分管理</span>
           </router-link>
         </li>
         <li>
           <router-link to="/complaint-management" class="nav-item" active-class="active">
+            <i class="uil uil-comment-exclamation nav-icon"></i>
             <span>投诉处理</span>
           </router-link>
         </li>
         <li>
           <router-link to="/account-management" class="nav-item" active-class="active">
+            <i class="uil uil-user-circle nav-icon"></i>
             <span>账号管理</span>
           </router-link>
         </li>
         <li>
           <router-link to="/system-settings" class="nav-item" active-class="active">
+            <i class="uil uil-setting nav-icon"></i>
             <span>系统设置</span>
           </router-link>
         </li>
@@ -95,6 +102,15 @@ export default {
   transition: all 0.2s ease;
   font-size: 0.9rem;
   font-weight: 400;
+  gap: 0.75rem;
+}
+
+.nav-icon {
+  font-size: 1.25rem;
+  flex-shrink: 0;
+  display: inline-block;
+  width: 1.25rem;
+  text-align: center;
 }
 
 .nav-item:hover {

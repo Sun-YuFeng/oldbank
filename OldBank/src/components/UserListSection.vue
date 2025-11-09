@@ -13,7 +13,7 @@
             v-model="searchQuery"
             @keyup.enter="handleSearchButton"
           >
-          <i class="fas fa-search search-icon"></i>
+          <i class="fa fa-search search-icon"></i>
         </div>
 
         <!-- 过滤器 -->
@@ -36,12 +36,12 @@
         <!-- 搜索和重置按钮 -->
         <div class="action-buttons">
           <button class="search-btn" @click="handleSearchButton">
-            <i class="fas fa-search"></i>
-            搜索
+            <i class="fa fa-search"></i>
+            <span>搜索</span>
           </button>
           <button class="reset-btn" @click="handleReset">
-            <i class="fas fa-redo"></i>
-            重置
+            <i class="fa fa-undo"></i>
+            <span>重置</span>
           </button>
         </div>
       </div>
@@ -63,7 +63,7 @@
               <th>手机号</th>
               <th>角色</th>
               <th>信誉分</th>
-              <th>登录状态</th>
+              <th>状态</th>
               <th>注册时间</th>
               <th>操作</th>
             </tr>
@@ -75,14 +75,33 @@
               <td class="user-role">{{ user.userIdentity || user.role || '普通用户' }}</td>
               <td class="warm-coin">{{ user.warmCoin || user.coin || 0 }}</td>
               <td>
-                <span :class="['status-badge', getLoginStatusClass(user.status)]">
-                  {{ getLoginStatusText(user.status) }}
+                <span :class="['status-badge', getStatusClass(user.status)]">
+                  {{ getStatusText(user.status) }}
                 </span>
               </td>
               <td class="register-time">{{ user.registerTime || user.createTime || 'N/A' }}</td>
               <td class="actions">
-                <button class="action-btn edit-btn">编辑</button>
-                <button class="action-btn disable-btn">禁用</button>
+                <button class="action-btn edit-btn">详情</button>
+                <button 
+                  v-if="isUserBanned(user.status)"
+                  class="action-btn unban-btn"
+                  @click="handleUnbanUser(user)"
+                >
+                  解封
+                </button>
+                <button 
+                  v-else
+                  class="action-btn ban-btn"
+                  @click="handleBanUser(user)"
+                >
+                  封禁
+                </button>
+                <button 
+                  class="action-btn delete-btn"
+                  @click="handleDeleteUser(user)"
+                >
+                  删除
+                </button>
               </td>
             </tr>
           </tbody>
@@ -102,14 +121,27 @@
         />
       </div>
     </div>
+
+    <!-- 封禁确认弹窗 -->
+    <BanConfirmModal
+      v-model:visible="banModalVisible"
+      :user="selectedUser"
+      :action="modalAction"
+      @confirm="handleBanConfirm"
+      @cancel="handleBanCancel"
+    />
   </div>
 </template>
 
 <script>
-import { getUserList, getUserCount, getUserListWithFilters } from '@/utils/api'
+import { getUserList, getUserCount, getUserListWithFilters, banUser, softDeleteUser } from '@/utils/api'
+import BanConfirmModal from './BanConfirmModal.vue'
 
 export default {
   name: 'UserListSection',
+  components: {
+    BanConfirmModal
+  },
   data() {
     return {
       userList: [],
@@ -120,7 +152,12 @@ export default {
       searchQuery: '',
       roleFilter: '',
       statusFilter: '',
-      searchTimer: null
+      searchTimer: null,
+      
+      // 封禁相关
+      banModalVisible: false,
+      selectedUser: null,
+      modalAction: 'ban' // 'ban' 或 'unban'
     }
   },
   computed: {
@@ -245,6 +282,84 @@ export default {
       // 重置到第一页并重新获取数据
       this.currentPage = 1
       this.fetchUserList()
+    },
+    
+    // 判断用户是否被封禁
+    isUserBanned(status) {
+      // 假设状态字段中，"禁用"表示被封禁
+      return status === '禁用' || status === 'banned' || status === '封禁'
+    },
+    
+    // 获取状态显示文本
+    getStatusText(status) {
+      if (this.isUserBanned(status)) {
+        return '已封禁'
+      }
+      if (status === 'active' || status === '活跃') {
+        return '活跃'
+      }
+      if (status === 'pending' || status === '待审核') {
+        return '待审核'
+      }
+      return status || '正常'
+    },
+    
+    // 获取状态样式类
+    getStatusClass(status) {
+      if (this.isUserBanned(status)) {
+        return 'status-banned'
+      }
+      if (status === 'active' || status === '活跃') {
+        return 'status-active'
+      }
+      if (status === 'pending' || status === '待审核') {
+        return 'status-pending'
+      }
+      return 'status-normal'
+    },
+    
+    // 封禁用户
+    handleBanUser(user) {
+      this.selectedUser = user
+      this.modalAction = 'ban'
+      this.banModalVisible = true
+    },
+    
+    // 解封用户
+    handleUnbanUser(user) {
+      this.selectedUser = user
+      this.modalAction = 'unban'
+      this.banModalVisible = true
+    },
+    
+    // 删除用户
+    handleDeleteUser(user) {
+      this.$confirm('确认删除该用户吗？删除后可以恢复。', '删除确认', {
+        confirmButtonText: '确认删除',
+        cancelButtonText: '取消',
+        type: 'warning'
+      }).then(async () => {
+        try {
+          await softDeleteUser(user.id, '管理操作')
+          this.$message.success('用户删除成功')
+          this.fetchUserList() // 刷新列表
+        } catch (error) {
+          console.error('删除用户失败:', error)
+          this.$message.error(error.message || '删除失败')
+        }
+      }).catch(() => {
+        // 用户取消操作
+      })
+    },
+    
+    // 封禁确认回调
+    handleBanConfirm() {
+      this.fetchUserList() // 刷新列表
+    },
+    
+    // 封禁取消回调
+    handleBanCancel() {
+      this.selectedUser = null
     }
   }
 }
@@ -342,54 +457,24 @@ export default {
   transition: all 0.2s ease;
   display: flex;
   align-items: center;
-  gap: 6px;
-  min-width: 80px;
-  justify-content: center;
-  white-space: nowrap;
-}
-
-.search-btn {
-  background-color: #3b82f6;
-  color: white;
-}
-
-.search-btn:hover {
-  background-color: #2563eb;
-  transform: translateY(-1px);
-}
-
-.reset-btn {
-  background-color: #f3f4f6;
-  color: #374151;
-  border: 1px solid #d1d5db;
-}
-
-.reset-btn:hover {
-  background-color: #e5e7eb;
-  border-color: #9ca3af;
-  transform: translateY(-1px);
-}
-
-/* 搜索和重置按钮样式 */
-.action-buttons {
-  display: flex;
   gap: 8px;
-}
-
-.search-btn, .reset-btn {
-  padding: 10px 20px;
-  border: none;
-  border-radius: 6px;
-  font-size: 14px;
-  font-weight: 500;
-  cursor: pointer;
-  transition: all 0.2s ease;
-  display: flex;
-  align-items: center;
-  gap: 6px;
   min-width: 80px;
   justify-content: center;
   white-space: nowrap;
+}
+
+.search-btn i,
+.reset-btn i {
+  font-size: 14px;
+  display: inline-block;
+  line-height: 1;
+  flex-shrink: 0;
+}
+
+.search-btn span,
+.reset-btn span {
+  display: inline-block;
+  line-height: 1;
 }
 
 .search-btn {
@@ -498,7 +583,28 @@ export default {
   min-width: 60px;
 }
 
-/* 登录状态样式 */
+/* 用户状态样式 */
+.status-banned {
+  background-color: #fee2e2;
+  color: #991b1b;
+}
+
+.status-active {
+  background-color: #dcfce7;
+  color: #166534;
+}
+
+.status-pending {
+  background-color: #fef3c7;
+  color: #92400e;
+}
+
+.status-normal {
+  background-color: #dbeafe;
+  color: #1e40af;
+}
+
+/* 保留原有的登录状态样式，兼容老代码 */
 .status-never-login {
   background-color: #f3f4f6;
   color: #6b7280;
@@ -548,6 +654,34 @@ export default {
   background-color: #2563eb;
 }
 
+.ban-btn {
+  background-color: #f97316;
+  color: white;
+}
+
+.ban-btn:hover {
+  background-color: #ea580c;
+}
+
+.unban-btn {
+  background-color: #10b981;
+  color: white;
+}
+
+.unban-btn:hover {
+  background-color: #059669;
+}
+
+.delete-btn {
+  background-color: #ef4444;
+  color: white;
+}
+
+.delete-btn:hover {
+  background-color: #dc2626;
+}
+
+/* 保留原有的样式，兼容老代码 */
 .enable-btn {
   background-color: #10b981;
   color: white;

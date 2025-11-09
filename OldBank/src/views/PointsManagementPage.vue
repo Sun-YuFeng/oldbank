@@ -22,6 +22,7 @@ import DashboardAnalytics from '../components/DashboardAnalytics.vue'
 import PointAdjust from '../components/PointAdjust.vue'
 import PointRuleSetting from '../components/PointRuleSetting.vue'
 import PointRecord from '../components/PointRecord.vue'
+
 </script>
 
 <style scoped>

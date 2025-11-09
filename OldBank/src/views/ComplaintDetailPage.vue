@@ -291,8 +291,7 @@ export default {
       try {
         const response = await handleComplaint(
           this.complaintId, 
-          this.handleForm.result,
-          '当前管理员'
+          this.handleForm.result
         )
         
         if (response.code === 200) {

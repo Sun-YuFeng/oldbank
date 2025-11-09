@@ -13,9 +13,6 @@
     <!-- 任务状态分布图表 -->
     <TaskStatusChart />
 
-    <!-- 任务筛选栏 -->
-    <TaskFilterBar @search="handleSearch" @filter="handleFilter" />
-
     <!-- 任务列表 -->
     <TaskTableSection />
   </div>
@@ -25,7 +22,6 @@
 import { ref } from 'vue'
 import TaskStatsCardGroup from '../components/TaskStatsCardGroup.vue'
 import TaskStatusChart from '../components/TaskStatusChart.vue'
-import TaskFilterBar from '../components/TaskFilterBar.vue'
 import TaskTableSection from '../components/TaskTableSection.vue'
 
 const searchQuery = ref('')

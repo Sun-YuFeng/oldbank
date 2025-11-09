@@ -14,6 +14,7 @@
     "format": "prettier --write src/"
   },
   "dependencies": {
+    "@iconscout/unicons": "^4.2.0",
     "axios": "^1.12.2",
     "chart.js": "^4.5.0",
     "echarts": "^6.0.0",

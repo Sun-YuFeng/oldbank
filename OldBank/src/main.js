@@ -1,5 +1,6 @@
 import './assets/main.css'
 import 'font-awesome/css/font-awesome.min.css'
+import '@iconscout/unicons/css/line.css'
 
 import { createApp } from 'vue'
 import { createPinia } from 'pinia'

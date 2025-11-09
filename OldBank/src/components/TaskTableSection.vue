@@ -1,6 +1,42 @@
 <!-- 任务表格区域 -->
  <template>
   <div class="table-container">
+    <!-- 筛选栏 -->
+    <div class="filter-container">
+      <div class="search-section">
+        <div class="search-input-wrapper">
+          <input 
+            type="text" 
+            placeholder="搜索任务标题或提交人..."
+            v-model="searchQuery"
+            class="search-input"
+          />
+          <i class="fas fa-search search-icon"></i>
+        </div>
+      </div>
+      <div class="filter-section">
+        <select v-model="selectedStatus" class="status-select">
+          <option value="">全部状态</option>
+          <option value="WAITING">待接单</option>
+          <option value="IN_PROGRESS">进行中</option>
+          <option value="COMPLETED">已完成</option>
+          <option value="CANCELLED">已取消</option>
+        </select>
+      </div>
+      
+      <!-- 按钮区域 -->
+      <div class="button-section">
+        <button class="search-btn" @click="handleSearch">
+          <i class="fas fa-search"></i>
+          搜索
+        </button>
+        <button class="reset-btn" @click="handleReset">
+          <i class="fas fa-redo"></i>
+          重置
+        </button>
+      </div>
+    </div>
+    
     <div class="table-header">
       <h3>任务列表</h3>
       <div class="table-info">
@@ -92,17 +128,6 @@ import { getTaskList } from '../utils/api.js'
 import TaskOperationCell from './TaskOperationCell.vue'
 import TaskDetailModal from './TaskDetailModal.vue'
 
-const props = defineProps({
-  searchQuery: {
-    type: String,
-    default: ''
-  },
-  statusFilter: {
-    type: String,
-    default: ''
-  }
-})
-
 const currentPage = ref(1)
 const pageSize = ref(10)
 const loading = ref(false)
@@ -110,6 +135,10 @@ const tasks = ref([])
 const totalTasks = ref(0)
 const showDetailModal = ref(false)
 const selectedTaskId = ref(null)
+
+// 本地筛选状态
+const searchQuery = ref('')
+const selectedStatus = ref('')
 
 // 计算属性
 const startIndex = computed(() => (currentPage.value - 1) * pageSize.value + 1)
@@ -133,8 +162,8 @@ const loadTasks = async () => {
     const response = await getTaskList(
       currentPage.value, 
       pageSize.value, 
-      props.searchQuery, 
-      props.statusFilter
+      searchQuery.value, 
+      selectedStatus.value
     )
     if (response.code === 200) {
       tasks.value = response.data.content || []
@@ -182,16 +211,30 @@ const handleReject = (task) => {
   // TODO: 实现任务审核拒绝逻辑
 }
 
+// 搜索按钮处理
+const handleSearch = () => {
+  currentPage.value = 1 // 重置到第一页
+  loadTasks()
+}
+
+// 重置按钮处理
+const handleReset = () => {
+  searchQuery.value = ''
+  selectedStatus.value = ''
+  currentPage.value = 1
+  loadTasks()
+}
+
 // 监听分页参数变化
 watch([currentPage, pageSize], () => {
   loadTasks()
 })
 
-// 监听筛选参数变化
-watch([() => props.searchQuery, () => props.statusFilter], () => {
-  currentPage.value = 1 // 重置到第一页
-  loadTasks()
-})
+// 监听筛选参数变化，移除自动搜索，改为手动触发
+// watch([searchQuery, selectedStatus], () => {
+//   currentPage.value = 1 // 重置到第一页
+//   loadTasks()
+// })
 
 // 组件挂载时加载数据
 onMounted(() => {
@@ -200,6 +243,106 @@ onMounted(() => {
 </script>
 
 <style scoped>
+/* 筛选栏样式 */
+.filter-container {
+  background: white;
+  border-bottom: 1px solid #e5e7eb;
+  padding: 20px 24px;
+  display: flex;
+  gap: 20px;
+  align-items: center;
+}
+
+.search-section {
+  flex: 1;
+}
+
+.search-input-wrapper {
+  position: relative;
+}
+
+.search-input {
+  width: 100%;
+  padding: 10px 40px 10px 16px;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  font-size: 14px;
+  outline: none;
+  transition: border-color 0.2s;
+}
+
+.search-input:focus {
+  border-color: #3b82f6;
+}
+
+.search-icon {
+  position: absolute;
+  right: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: #9ca3af;
+  font-size: 14px;
+}
+
+.filter-section {
+  min-width: 120px;
+}
+
+.status-select {
+  width: 100%;
+  padding: 10px 16px;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  font-size: 14px;
+  background: white;
+  outline: none;
+  cursor: pointer;
+}
+
+.status-select:focus {
+  border-color: #3b82f6;
+}
+
+/* 按钮区域样式 */
+.button-section {
+  display: flex;
+  gap: 12px;
+}
+
+.search-btn, .reset-btn {
+  padding: 10px 20px;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  font-size: 14px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  transition: all 0.2s;
+}
+
+.search-btn {
+  background: #3b82f6;
+  color: white;
+  border-color: #3b82f6;
+}
+
+.search-btn:hover {
+  background: #2563eb;
+  border-color: #2563eb;
+}
+
+.reset-btn {
+  background: white;
+  color: #6b7280;
+}
+
+.reset-btn:hover {
+  background: #f9fafb;
+  border-color: #9ca3af;
+  color: #374151;
+}
+
 .table-container {
   background: white;
   border-radius: 8px;
