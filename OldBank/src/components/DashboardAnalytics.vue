@@ -21,7 +21,18 @@
       <div class="chart-box">
         <h3>积分变动原因</h3>
         <div class="chart-content">
-          <canvas ref="pieChart"></canvas>
+          <div v-if="warmCoinLoading" class="loading-state">
+            <div class="loading-spinner"></div>
+            <p>正在加载积分数据...</p>
+          </div>
+          <div v-else-if="warmCoinError" class="error-state">
+            <svg class="error-icon" fill="currentColor" viewBox="0 0 20 20">
+              <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd"></path>
+            </svg>
+            <p>{{ warmCoinError }}</p>
+            <button @click="fetchWarmCoinStats" class="retry-btn">重试</button>
+          </div>
+          <canvas v-else ref="pieChart"></canvas>
         </div>
       </div>
     </div>
@@ -31,7 +42,7 @@
 <script setup>
 import { ref, onMounted, nextTick, onBeforeUnmount } from 'vue'
 import Chart from 'chart.js/auto'
-import { getWeeklyServiceTrend } from '../utils/api.js'
+import { getWeeklyServiceTrend, getWeeklyWarmCoinStatsByType } from '../utils/api.js'
 
 const demandChart = ref(null)
 const pieChart = ref(null)
@@ -40,6 +51,9 @@ const pieChartInstance = ref(null)
 const loading = ref(true)
 const error = ref('')
 const serviceData = ref([])
+const warmCoinStats = ref([])
+const warmCoinLoading = ref(true)
+const warmCoinError = ref('')
 
 const fetchServiceData = async () => {
   try {
@@ -75,10 +89,49 @@ const fetchServiceData = async () => {
   // 数据加载完成且没有错误时，等待 DOM 更新后创建图表
   if (!error.value && serviceData.value.length > 0) {
     await nextTick()
-    // 额外延迟确保 canvas 元素已渲染到 DOM
+    // 增加延迟时间确保 DOM 完全渲染
     setTimeout(() => {
       createServiceChart(serviceData.value)
-    }, 150)
+    }, 300)
+  }
+}
+
+const fetchWarmCoinStats = async () => {
+  try {
+    warmCoinLoading.value = true
+    warmCoinError.value = ''
+    
+    const response = await getWeeklyWarmCoinStatsByType()
+    
+    if (response.code === 200) {
+      const data = response.data || []
+      
+      if (data.length === 0) {
+        warmCoinError.value = '暂无积分变动数据'
+        return
+      }
+
+      warmCoinStats.value = data
+      console.log('积分变动统计数据:', data)
+    } else {
+      warmCoinError.value = '获取积分数据失败: ' + (response.message || '未知错误')
+      return
+    }
+  } catch (err) {
+    console.error('获取积分变动统计失败:', err)
+    warmCoinError.value = '网络连接失败，请稍后重试'
+    return
+  } finally {
+    warmCoinLoading.value = false
+  }
+  
+  // 积分数据加载完成且没有错误时，创建饼图
+  if (!warmCoinError.value && warmCoinStats.value.length > 0) {
+    await nextTick()
+    // 增加延迟时间确保 DOM 完全渲染
+    setTimeout(() => {
+      createWarmCoinChart(warmCoinStats.value)
+    }, 300)
   }
 }
 
@@ -165,48 +218,123 @@ const createServiceChart = (data, retryCount = 0) => {
     }
   })
 
-  // 积分变动原因饼图（如果 canvas 存在）
-  if (pieChart.value) {
+  // 积分变动原因饼图将在 fetchWarmCoinStats 函数中创建
+  
+  console.log('服务量图表创建成功!')
+}
+
+const createWarmCoinChart = (data, retryCount = 0) => {
+  console.log('开始创建积分变动图表...', retryCount > 0 ? `(重试 ${retryCount})` : '')
+  console.log('图表数据:', data)
+  
+  // 检查 canvas 元素是否存在
+  if (!pieChart.value) {
+    // 如果重试次数少于5次，延迟重试（增加重试次数）
+    if (retryCount < 5) {
+      console.warn(`饼图 Canvas 元素未找到，${200 * (retryCount + 1)}ms 后重试...`)
+      setTimeout(() => {
+        createWarmCoinChart(data, retryCount + 1)
+      }, 200 * (retryCount + 1))
+      return
+    } else {
+      console.error('多次重试后仍找不到饼图 Canvas 元素')
+      warmCoinError.value = '图表容器未找到'
+      return
+    }
+  }
+
+  // 数据验证：确保数据是数组且包含5个元素
+  if (!Array.isArray(data) || data.length !== 5) {
+    console.error('积分变动数据格式不正确，期望5个元素的数组，实际:', data)
+    warmCoinError.value = '数据格式错误'
+    return
+  }
+
+  // 数据验证：确保所有元素都是数字
+  if (!data.every(item => typeof item === 'number' && !isNaN(item))) {
+    console.error('积分变动数据包含非数字元素:', data)
+    warmCoinError.value = '数据包含无效值'
+    return
+  }
+
+  // 如果已有图表实例，先销毁
+  if (pieChartInstance.value) {
+    try {
+      pieChartInstance.value.destroy()
+    } catch (error) {
+      console.warn('销毁图表实例时出错:', error)
+    }
+    pieChartInstance.value = null
+  }
+
+  // 积分变动类型标签
+  const labels = ['服务获取', '发布需求支出', '捐赠公益池', '管理员调整', '违规扣除']
+  
+  try {
+    // 创建积分变动原因饼图
     pieChartInstance.value = new Chart(pieChart.value.getContext('2d'), {
-    type: 'pie',
-    data: {
-      labels: ['完成任务', '邀请奖励', '注册奖励', '管理员调整', '违规扣分'],
-      datasets: [{
-        data: [47, 23, 15, 11, 4],
-        backgroundColor: [
-          'rgba(52, 152, 219, 0.7)',
-          'rgba(155, 89, 182, 0.7)',
-          'rgba(243, 156, 18, 0.7)',
-          'rgba(39, 174, 96, 0.7)',
-          'rgba(231, 76, 60, 0.7)'
-        ],
-        borderColor: [
-          'rgba(52, 152, 219, 1)',
-          'rgba(155, 89, 182, 1)',
-          'rgba(243, 156, 18, 1)',
-          'rgba(39, 174, 96, 1)',
-          'rgba(231, 76, 60, 1)'
-        ],
-        borderWidth: 1
-      }]
-    },
-    options: {
-      responsive: true,
-      maintainAspectRatio: false,
-      plugins: {
-        legend: {
-          position: 'right'
+      type: 'pie',
+      data: {
+        labels: labels,
+        datasets: [{
+          data: data,
+          backgroundColor: [
+            'rgba(52, 152, 219, 0.7)',  // 服务获取 - 蓝色
+            'rgba(155, 89, 182, 0.7)',  // 发布需求支出 - 紫色
+            'rgba(243, 156, 18, 0.7)',  // 捐赠公益池 - 橙色
+            'rgba(39, 174, 96, 0.7)',   // 管理员调整 - 绿色
+            'rgba(231, 76, 60, 0.7)'    // 违规扣除 - 红色
+          ],
+          borderColor: [
+            'rgba(52, 152, 219, 1)',
+            'rgba(155, 89, 182, 1)',
+            'rgba(243, 156, 18, 1)',
+            'rgba(39, 174, 96, 1)',
+            'rgba(231, 76, 60, 1)'
+          ],
+          borderWidth: 1
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        animation: {
+          duration: 800,  // 减少动画时间避免卡顿
+          easing: 'easeInOutQuart'
+        },
+        plugins: {
+          legend: {
+            position: 'right'
+          },
+          title: {
+            display: true,
+            text: '本周积分变动统计'
+          },
+          tooltip: {
+            callbacks: {
+              label: function(context) {
+                const label = context.label || ''
+                const value = context.parsed || 0
+                const total = context.dataset.data.reduce((a, b) => a + b, 0)
+                const percentage = total > 0 ? ((value / total) * 100).toFixed(1) : '0.0'
+                return `${label}: ${value}次 (${percentage}%)`
+              }
+            }
+          }
         }
       }
-    }
     })
+    
+    console.log('积分变动图表创建成功!')
+  } catch (error) {
+    console.error('创建饼图时出错:', error)
+    warmCoinError.value = '图表创建失败: ' + error.message
   }
-  
-  console.log('图表创建成功!')
 }
 
 onMounted(() => {
   fetchServiceData()
+  fetchWarmCoinStats()
 })
 
 // 组件卸载时销毁图表实例

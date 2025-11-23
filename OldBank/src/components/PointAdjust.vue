@@ -18,8 +18,9 @@
           <input 
             type="number" 
             v-model="adjustValue" 
-            placeholder="-1"
+            placeholder="正数增加，负数减少"
             class="form-input"
+            step="1"
           />
         </div>
         <div class="form-group">
@@ -34,41 +35,82 @@
         <div class="form-group">
           <button 
             class="adjust-btn"
-            :disabled="!canAdjust"
+            :disabled="!canAdjust || loading"
             @click="executeAdjust"
           >
-            执行调整
+            {{ loading ? '调整中...' : '执行调整' }}
           </button>
         </div>
       </div>
+    </div>
+    
+    <!-- 消息提示 -->
+    <div v-if="message" :class="['message', messageType]">
+      {{ message }}
     </div>
   </div>
 </template>
 
 <script setup>
 import { ref, computed } from 'vue'
+import { adjustUserPoints } from '../utils/api'
 
 const userId = ref('')
 const adjustValue = ref('')
 const reason = ref('')
+const loading = ref(false)
+const message = ref('')
+const messageType = ref('') // 'success' or 'error'
 
 const canAdjust = computed(() => {
   return userId.value.trim() !== '' && 
          adjustValue.value !== '' && 
+         adjustValue.value !== '0' &&
          reason.value.trim() !== ''
 })
 
-const executeAdjust = () => {
-  if (canAdjust.value) {
-    console.log('执行积分调整:', {
-      userId: userId.value,
-      adjustValue: adjustValue.value,
-      reason: reason.value
-    })
-    // 重置表单
-    userId.value = ''
-    adjustValue.value = ''
-    reason.value = ''
+const showMessage = (text, type) => {
+  message.value = text
+  messageType.value = type
+  setTimeout(() => {
+    message.value = ''
+    messageType.value = ''
+  }, 3000)
+}
+
+const executeAdjust = async () => {
+  if (!canAdjust.value) return
+  
+  loading.value = true
+  
+  try {
+    const result = await adjustUserPoints(userId.value, adjustValue.value, reason.value)
+    
+    if (result.code === 200) {
+      showMessage(`积分调整成功！用户 ${result.data.username} 积分${adjustValue.value > 0 ? '增加' : '减少'} ${Math.abs(adjustValue.value)}，当前余额：${result.data.balanceAfter}`, 'success')
+      
+      // 重置表单
+      userId.value = ''
+      adjustValue.value = ''
+      reason.value = ''
+      
+      // 触发父组件刷新事件
+      const event = new CustomEvent('point-adjusted', { 
+        detail: { 
+          userId: result.data.userId,
+          amount: result.data.amount,
+          balanceAfter: result.data.balanceAfter
+        } 
+      })
+      window.dispatchEvent(event)
+    } else {
+      showMessage(result.message || '积分调整失败', 'error')
+    }
+  } catch (error) {
+    console.error('积分调整错误:', error)
+    showMessage(error.message || '网络错误，请稍后重试', 'error')
+  } finally {
+    loading.value = false
   }
 }
 </script>
@@ -143,5 +185,36 @@ const executeAdjust = () => {
 .adjust-btn:disabled {
   background: #bdc3c7;
   cursor: not-allowed;
+}
+
+.message {
+  margin-top: 15px;
+  padding: 12px 16px;
+  border-radius: 4px;
+  font-size: 14px;
+  animation: slideIn 0.3s ease-out;
+}
+
+.message.success {
+  background: #d4edda;
+  color: #155724;
+  border: 1px solid #c3e6cb;
+}
+
+.message.error {
+  background: #f8d7da;
+  color: #721c24;
+  border: 1px solid #f5c6cb;
+}
+
+@keyframes slideIn {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 </style>

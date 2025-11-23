@@ -286,6 +286,11 @@ export const getVolunteerDetail = (volunteerId) => {
   return api.get(`/api/volunteers/${volunteerId}`)
 }
 
+// 获取志愿者详细信息（管理员用）
+export const getVolunteerDetailInfo = (volunteerId) => {
+  return api.get(`/api/admin/volunteers/${volunteerId}/detail-info`)
+}
+
 // 获取志愿者排名列表
 export const getVolunteerRanking = (page = 1, pageSize = 10, search = '') => {
   const params = {
@@ -384,6 +389,41 @@ export const getTaskStats = () => {
   return api.get('/api/admin/demands/stats')
 }
 
+// 获取每日任务状态统计
+export const getDailyStatusStats = () => {
+  return api.get('/api/demands/daily-status-stats')
+}
+
+// 搜索任务
+export const searchTasks = (keyword, page = 0, size = 10, sortBy = 'createTime', sortDirection = 'DESC') => {
+  const params = {
+    keyword: keyword?.trim() || '',
+    page,
+    size,
+    sortBy,
+    sortDirection
+  }
+  
+  console.log('🔍 搜索任务请求参数:', params)
+  
+  return api.get('/api/demands/search', {
+    params
+  })
+}
+
+// 根据状态获取任务列表
+export const getTasksByStatus = (status, page = 1, pageSize = 10) => {
+  const params = {
+    status,
+    page,
+    pageSize
+  }
+  
+  return api.get('/api/demands/by-status', {
+    params
+  })
+}
+
 // 暖龄币记录管理API
 
 // 获取暖龄币记录列表
@@ -423,6 +463,20 @@ export const getUserWarmCoinRecords = (userId, page = 1, pageSize = 10) => {
       page,
       pageSize
     }
+  })
+}
+
+// 获取本周各类型积分变动统计
+export const getWeeklyWarmCoinStatsByType = () => {
+  return api.get('/api/warm-coin-records/weekly-stats-by-type')
+}
+
+// 管理员调整用户积分
+export const adjustUserPoints = (userId, amount, reason) => {
+  return api.post('/api/admin/warm-coin-records/adjust', {
+    userId: parseInt(userId),
+    amount: parseInt(amount),
+    reason: reason.trim()
   })
 }
 

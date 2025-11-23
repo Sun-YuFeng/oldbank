@@ -10,6 +10,7 @@
             placeholder="搜索任务标题或提交人..."
             v-model="searchQuery"
             class="search-input"
+            @keyup.enter="handleSearch"
           />
           <i class="fas fa-search search-icon"></i>
         </div>
@@ -17,10 +18,10 @@
       <div class="filter-section">
         <select v-model="selectedStatus" class="status-select">
           <option value="">全部状态</option>
-          <option value="WAITING">待接单</option>
-          <option value="IN_PROGRESS">进行中</option>
-          <option value="COMPLETED">已完成</option>
-          <option value="CANCELLED">已取消</option>
+          <option value="待接单">待接单</option>
+          <option value="进行中">进行中</option>
+          <option value="已完成">已完成</option>
+          <option value="已取消">已取消</option>
         </select>
       </div>
       
@@ -42,7 +43,12 @@
       <div class="table-info">
         <span v-if="loading">加载中...</span>
         <span v-else>
-          共 {{ totalTasks }} 条任务，当前显示 {{ startIndex }}-{{ endIndex }} 条
+          <span v-if="searchQuery.trim()">
+            搜索"{{ searchQuery }}"结果：共 {{ totalTasks }} 条任务，当前显示 {{ startIndex }}-{{ endIndex }} 条
+          </span>
+          <span v-else>
+            共 {{ totalTasks }} 条任务，当前显示 {{ startIndex }}-{{ endIndex }} 条
+          </span>
         </span>
       </div>
     </div>
@@ -71,7 +77,12 @@
           </tr>
           <tr v-else-if="tasks.length === 0">
             <td colspan="10" style="text-align: center; padding: 40px;">
-              <span>暂无任务数据</span>
+              <span v-if="searchQuery.trim()">
+                未找到包含"{{ searchQuery }}"的任务
+              </span>
+              <span v-else>
+                暂无任务数据
+              </span>
             </td>
           </tr>
           <tr v-else v-for="task in tasks" :key="task.id">
@@ -81,7 +92,7 @@
             <td>{{ task.publisherPhone }}</td>
             <td>{{ task.warmCoin }}</td>
             <td>
-              <span :class="getStatusClass(task.statusCode)">
+              <span :class="getStatusClass(task.status)">
                 {{ task.status }}
               </span>
             </td>
@@ -124,7 +135,7 @@
 
 <script setup>
 import { ref, computed, onMounted, watch } from 'vue'
-import { getTaskList } from '../utils/api.js'
+import { getTaskList, getTasksByStatus, searchTasks } from '../utils/api.js'
 import TaskOperationCell from './TaskOperationCell.vue'
 import TaskDetailModal from './TaskDetailModal.vue'
 
@@ -145,36 +156,80 @@ const startIndex = computed(() => (currentPage.value - 1) * pageSize.value + 1)
 const endIndex = computed(() => Math.min(currentPage.value * pageSize.value, totalTasks.value))
 
 // 状态样式映射
-const getStatusClass = (statusCode) => {
+const getStatusClass = (status) => {
   const classes = {
-    'WAITING': 'status-pending',
-    'IN_PROGRESS': 'status-in-progress',
-    'COMPLETED': 'status-approved',
-    'CANCELLED': 'status-rejected'
+    '待接单': 'status-waiting',
+    '进行中': 'status-in-progress',
+    '已完成': 'status-completed',
+    '已取消': 'status-cancelled'
   }
-  return classes[statusCode] || 'status-pending'
+  return classes[status] || 'status-waiting'
+}
+
+// 中文状态映射到英文枚举值
+const mapStatusToEnum = (status) => {
+  const statusMap = {
+    '待接单': 'WAITING',
+    '进行中': 'IN_PROGRESS',
+    '已完成': 'COMPLETED',
+    '已取消': 'CANCELLED'
+  }
+  return statusMap[status] || status
 }
 
 // 加载任务列表
 const loadTasks = async () => {
   loading.value = true
   try {
-    const response = await getTaskList(
-      currentPage.value, 
-      pageSize.value, 
-      searchQuery.value, 
-      selectedStatus.value
-    )
+    let response
+    
+    // 如果有搜索关键词，使用搜索接口
+    if (searchQuery.value.trim()) {
+      console.log('🔍 使用搜索接口，参数:', {
+        keyword: searchQuery.value.trim(),
+        page: currentPage.value - 1,
+        size: pageSize.value
+      })
+      
+      response = await searchTasks(
+        searchQuery.value.trim(),
+        currentPage.value - 1, // API页码从0开始
+        pageSize.value
+      )
+    } else if (selectedStatus.value) {
+      // 如果选择了状态筛选，使用状态筛选接口
+      response = await getTasksByStatus(
+        mapStatusToEnum(selectedStatus.value),
+        currentPage.value,
+        pageSize.value
+      )
+    } else {
+      // 否则使用通用任务列表接口
+      response = await getTaskList(
+        currentPage.value, 
+        pageSize.value, 
+        searchQuery.value, 
+        mapStatusToEnum(selectedStatus.value)
+      )
+    }
+    
+    console.log('📦 任务列表API响应:', response)
+    
     if (response.code === 200) {
       tasks.value = response.data.content || []
       totalTasks.value = response.data.totalElements || 0
+      console.log('📋 任务数据:', {
+        任务数量: tasks.value.length,
+        总数: totalTasks.value,
+        当前页: currentPage.value
+      })
     } else {
-      console.error('获取任务列表失败:', response.message)
+      console.error('❌ 获取任务列表失败:', response.message)
       tasks.value = []
       totalTasks.value = 0
     }
   } catch (error) {
-    console.error('获取任务列表出错:', error)
+    console.error('🚨 获取任务列表出错:', error)
     tasks.value = []
     totalTasks.value = 0
   } finally {
@@ -213,6 +268,10 @@ const handleReject = (task) => {
 
 // 搜索按钮处理
 const handleSearch = () => {
+  const keyword = searchQuery.value.trim()
+  console.log('🔍 点击搜索，关键词:', `"${keyword}"`)
+  console.log('📄 当前页码:', currentPage.value)
+  
   currentPage.value = 1 // 重置到第一页
   loadTasks()
 }
@@ -268,11 +327,17 @@ onMounted(() => {
   border-radius: 6px;
   font-size: 14px;
   outline: none;
-  transition: border-color 0.2s;
+  transition: all 0.2s;
+  box-sizing: border-box;
 }
 
 .search-input:focus {
   border-color: #3b82f6;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+
+.search-input::placeholder {
+  color: #9ca3af;
 }
 
 .search-icon {
@@ -436,25 +501,8 @@ onMounted(() => {
   text-decoration: underline;
 }
 
-.status-approved {
-  background: #dcfce7;
-  color: #166534;
-  padding: 4px 8px;
-  border-radius: 4px;
-  font-size: 12px;
-  font-weight: 500;
-}
-
-.status-rejected {
-  background: #fee2e2;
-  color: #991b1b;
-  padding: 4px 8px;
-  border-radius: 4px;
-  font-size: 12px;
-  font-weight: 500;
-}
-
-.status-pending {
+/* 待接单 - 黄色（保持原有颜色） */
+.status-waiting {
   background: #fef3c7;
   color: #92400e;
   padding: 4px 8px;
@@ -463,9 +511,30 @@ onMounted(() => {
   font-weight: 500;
 }
 
+/* 进行中 - 蓝色 */
 .status-in-progress {
   background: #dbeafe;
   color: #1e40af;
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+/* 已完成 - 绿色 */
+.status-completed {
+  background: #dcfce7;
+  color: #166534;
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+/* 已取消 - 灰色 */
+.status-cancelled {
+  background: #f3f4f6;
+  color: #6b7280;
   padding: 4px 8px;
   border-radius: 4px;
   font-size: 12px;

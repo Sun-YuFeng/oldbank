@@ -96,18 +96,6 @@
             <button @click="goToLogin" class="login-button">前往登录</button>
           </div>
         </div>
-        
-        <!-- 未授权提示 -->
-        <div v-if="!loading && unauthorized" class="unauthorized-state">
-          <svg class="warning-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.732 15.5c-.77.833.192 2.5 1.732 2.5z"></path>
-          </svg>
-          <div class="unauthorized-content">
-            <h4>访问权限受限</h4>
-            <p>请先登录管理员账号以查看志愿者信息</p>
-            <button @click="goToLogin" class="login-button">前往登录</button>
-          </div>
-        </div>
     </div>
     
     <!-- 分页组件 -->
@@ -254,6 +242,10 @@ export default {
       console.log('查看志愿者详情:', volunteer);
       // 跳转到志愿者详情页面
       this.$router.push(`/volunteer/${volunteer.id}`);
+    },
+    
+    goToLogin() {
+      this.$router.push('/login');
     }
   }
 };
@@ -568,5 +560,57 @@ export default {
 .detail-btn:active {
   transform: translateY(0);
   box-shadow: none;
+}
+
+/* 未授权状态样式 */
+.unauthorized-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 60px 20px;
+  color: #6b7280;
+}
+
+.warning-icon {
+  width: 48px;
+  height: 48px;
+  color: #f59e0b;
+  margin-bottom: 16px;
+}
+
+.unauthorized-content {
+  text-align: center;
+  max-width: 400px;
+}
+
+.unauthorized-content h4 {
+  font-size: 18px;
+  font-weight: 600;
+  color: #111827;
+  margin: 0 0 8px 0;
+}
+
+.unauthorized-content p {
+  font-size: 14px;
+  color: #6b7280;
+  margin: 0 0 20px 0;
+  line-height: 1.5;
+}
+
+.login-button {
+  padding: 8px 16px;
+  background: #3b82f6;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.login-button:hover {
+  background: #2563eb;
 }
 </style>
