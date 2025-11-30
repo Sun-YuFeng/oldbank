@@ -39,6 +39,8 @@ export default {
     const loading = ref(true);
     const error = ref('');
     const weeklyData = ref([]);
+    const isDestroyed = ref(false);
+    const requestController = ref(null); // 用于取消请求
     
     // 计算当前周范围
     const currentWeekRange = computed(() => {
@@ -52,11 +54,27 @@ export default {
     });
 
     const fetchData = async () => {
+      // 如果组件已销毁，不再执行
+      if (isDestroyed.value) return;
+      
       try {
         loading.value = true;
         error.value = '';
         
-        const response = await getWeeklyServiceTrend();
+        // 取消之前的请求
+        if (requestController.value) {
+          requestController.value.abort();
+        }
+        
+        // 创建新的AbortController
+        requestController.value = new AbortController();
+        
+        const response = await getWeeklyServiceTrend({
+          signal: requestController.value.signal
+        });
+        
+        // 检查组件是否已被销毁
+        if (isDestroyed.value) return;
         
         if (response.code === 200) {
           weeklyData.value = response.data || [];
@@ -73,52 +91,80 @@ export default {
           return;
         }
       } catch (err) {
+        // 如果是手动取消的错误，不显示错误信息
+        if (err.name === 'AbortError') {
+          console.log('请求被取消');
+          return;
+        }
+        
         console.error('获取本周服务量趋势失败:', err);
-        error.value = '网络连接失败，请稍后重试';
+        if (!isDestroyed.value) {
+          error.value = '网络连接失败，请稍后重试';
+        }
         return;
       } finally {
-        loading.value = false;
+        if (!isDestroyed.value) {
+          loading.value = false;
+        }
       }
       
       // 数据加载完成且没有错误时，等待 DOM 更新后创建图表
-      if (!error.value && weeklyData.value.length > 0) {
+      if (!error.value && weeklyData.value.length > 0 && !isDestroyed.value) {
         await nextTick();
-        // 额外延迟确保 canvas 元素已渲染到 DOM
-        setTimeout(() => {
-          createChart();
-        }, 150);
+        // 使用更可靠的时机创建图表
+        requestAnimationFrame(() => {
+          if (!isDestroyed.value) {
+            createChart();
+          }
+        });
       }
     };
 
     const createChart = (retryCount = 0) => {
       console.log('开始创建图表...', retryCount > 0 ? `(重试 ${retryCount})` : '');
       
+      // 检查组件是否已销毁
+      if (isDestroyed.value) {
+        console.log('组件已销毁，停止创建图表');
+        return;
+      }
+      
       // 检查 canvas 元素是否存在
       if (!chartCanvas.value) {
-        // 如果重试次数少于3次，延迟重试
-        if (retryCount < 3) {
-          console.warn(`Canvas 元素未找到，${100 * (retryCount + 1)}ms 后重试...`);
-          setTimeout(() => {
-            createChart(retryCount + 1);
-          }, 100 * (retryCount + 1));
+        // 如果重试次数少于5次，使用requestAnimationFrame重试
+        if (retryCount < 5) {
+          console.warn(`Canvas 元素未找到，使用requestAnimationFrame重试...`);
+          requestAnimationFrame(() => {
+            if (!isDestroyed.value) {
+              createChart(retryCount + 1);
+            }
+          });
           return;
         } else {
           console.error('多次重试后仍找不到 Canvas 元素');
-          error.value = '图表容器未找到';
+          if (!isDestroyed.value) {
+            error.value = '图表容器未找到';
+          }
           return;
         }
       }
 
       // 如果已有图表实例，先销毁
       if (chartInstance.value) {
-        chartInstance.value.destroy();
+        try {
+          chartInstance.value.destroy();
+        } catch (err) {
+          console.warn('销毁图表实例时出错:', err);
+        }
         chartInstance.value = null;
       }
 
       // 确保有数据再创建图表
       if (!weeklyData.value || weeklyData.value.length === 0) {
         console.warn('没有数据用于创建图表');
-        error.value = '暂无数据';
+        if (!isDestroyed.value) {
+          error.value = '暂无数据';
+        }
         return;
       }
 
@@ -131,7 +177,9 @@ export default {
 
       if (validData.length === 0) {
         console.warn('没有有效数据用于创建图表');
-        error.value = '数据格式不正确';
+        if (!isDestroyed.value) {
+          error.value = '数据格式不正确';
+        }
         return;
       }
 
@@ -139,7 +187,9 @@ export default {
         _createChartInstance(chartCanvas.value, validData);
       } catch (err) {
         console.error('创建图表实例失败:', err);
-        error.value = '图表创建失败: ' + err.message;
+        if (!isDestroyed.value) {
+          error.value = '图表创建失败: ' + err.message;
+        }
       }
     };
 
@@ -273,8 +323,20 @@ export default {
 
     // 组件卸载时销毁图表实例
     onBeforeUnmount(() => {
+      isDestroyed.value = true;
+      
+      // 取消进行中的请求
+      if (requestController.value) {
+        requestController.value.abort();
+      }
+      
+      // 销毁图表实例
       if (chartInstance.value) {
-        chartInstance.value.destroy();
+        try {
+          chartInstance.value.destroy();
+        } catch (err) {
+          console.warn('组件卸载时销毁图表实例出错:', err);
+        }
         chartInstance.value = null;
       }
     });

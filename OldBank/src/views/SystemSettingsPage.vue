@@ -65,15 +65,34 @@ export default {
     async fetchCurrentAdminInfo() {
       try {
         const response = await getCurrentAdmin()
+        console.log('获取管理员信息响应:', response)
         if (response.code === 200) {
-          this.accountInfo = response.data
+          const data = response.data
+          // 处理用户身份显示
+          this.accountInfo = {
+            username: data.username || '',
+            phone: data.phone || data.email || '', // 如果没有phone，使用email
+            adminLevel: data.adminLevel || 'SUPER_ADMIN', // 默认为超级管理员
+            adminLevelDesc: this.getAdminLevelDesc(data.adminLevel || 'SUPER_ADMIN'),
+            approvalStatus: data.approvalStatus || 'APPROVED',
+            approvalStatusText: this.getApprovalStatusText(data.approvalStatus || 'APPROVED')
+          }
+          console.log('处理后的账号信息:', this.accountInfo)
         }
       } catch (error) {
         console.error('获取管理员信息失败:', error)
         // 如果API调用失败，使用本地存储的信息作为备用
         const adminInfo = localStorage.getItem('adminInfo')
         if (adminInfo) {
-          this.accountInfo = JSON.parse(adminInfo)
+          const parsedInfo = JSON.parse(adminInfo)
+          this.accountInfo = {
+            username: parsedInfo.username || '',
+            phone: parsedInfo.phone || parsedInfo.email || '',
+            adminLevel: parsedInfo.adminLevel || 'SUPER_ADMIN',
+            adminLevelDesc: this.getAdminLevelDesc(parsedInfo.adminLevel || 'SUPER_ADMIN'),
+            approvalStatus: parsedInfo.approvalStatus || 'APPROVED',
+            approvalStatusText: this.getApprovalStatusText(parsedInfo.approvalStatus || 'APPROVED')
+          }
         }
       }
     },
@@ -105,7 +124,33 @@ export default {
         case 'JUNIOR_ADMIN':
           return 'junior-admin'
         default:
-          return 'unknown'
+          return 'super-admin' // 默认为超级管理员样式
+      }
+    },
+    
+    getAdminLevelDesc(adminLevel) {
+      switch (adminLevel) {
+        case 'SUPER_ADMIN':
+          return '超级管理员'
+        case 'SENIOR_ADMIN':
+          return '高级管理员'
+        case 'JUNIOR_ADMIN':
+          return '初级管理员'
+        default:
+          return '超级管理员' // 默认显示
+      }
+    },
+    
+    getApprovalStatusText(approvalStatus) {
+      switch (approvalStatus) {
+        case 'APPROVED':
+          return '已审核'
+        case 'PENDING':
+          return '待审核'
+        case 'REJECTED':
+          return '已拒绝'
+        default:
+          return '已审核' // 默认显示
       }
     }
   }
@@ -201,86 +246,7 @@ h1 {
   color: #0369a1;
 }
 
-.role-badge.super-admin {
-  background: #fef3c7;
-  color: #92400e;
-}
 
-.role-badge.senior-admin {
-  background: #dbeafe;
-  color: #1e40af;
-}
-
-.role-badge.junior-admin {
-  background: #f0f9ff;
-  color: #0369a1;
-}
-
-.role-badge.unknown {
-  background: #f3f4f6;
-  color: #6b7280;
-}
-
-.password-hint {
-  margin-left: 12px;
-  color: #6b7280;
-  font-size: 12px;
-  font-style: italic;
-}
-
-.role-badge.super-admin {
-  background: #fef3c7;
-  color: #92400e;
-}
-
-.role-badge.senior-admin {
-  background: #dbeafe;
-  color: #1e40af;
-}
-
-.role-badge.junior-admin {
-  background: #f0f9ff;
-  color: #0369a1;
-}
-
-.role-badge.unknown {
-  background: #f3f4f6;
-  color: #6b7280;
-}
-
-.password-hint {
-  margin-left: 12px;
-  color: #6b7280;
-  font-size: 12px;
-  font-style: italic;
-}
-
-.role-badge.super-admin {
-  background: #fef3c7;
-  color: #92400e;
-}
-
-.role-badge.senior-admin {
-  background: #dbeafe;
-  color: #1e40af;
-}
-
-.role-badge.junior-admin {
-  background: #f0f9ff;
-  color: #0369a1;
-}
-
-.role-badge.unknown {
-  background: #f3f4f6;
-  color: #6b7280;
-}
-
-.password-hint {
-  margin-left: 12px;
-  color: #6b7280;
-  font-size: 12px;
-  font-style: italic;
-}
 
 .role-badge.super-admin {
   background: #fef3c7;

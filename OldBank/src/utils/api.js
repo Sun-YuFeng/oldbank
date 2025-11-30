@@ -130,7 +130,7 @@ export const register = (account, password, phone) => {
 
 // 获取待审核的管理员账号列表
 export const getPendingAccounts = () => {
-  return api.get('/api/admin/auth/pending')
+  return api.get('/api/admin/auth/unapproved')
 }
 
 // 获取所有管理员账号列表
@@ -291,26 +291,16 @@ export const getVolunteerDetailInfo = (volunteerId) => {
   return api.get(`/api/admin/volunteers/${volunteerId}/detail-info`)
 }
 
-// 获取志愿者排名列表
-export const getVolunteerRanking = (page = 1, pageSize = 10, search = '') => {
-  const params = {
-    page,
-    pageSize
-  }
-  
-  // 只有当搜索关键字有值时才添加到请求中
-  if (search && search.trim() !== '') {
-    params.search = search.trim()
-  }
-  
-  return api.get('/api/admin/volunteers/ranking', {
-    params
-  })
+// 获取志愿者活跃度排名（基于最近7天内完成的服务次数）
+export const getVolunteerRanking = () => {
+  return api.get('/api/admin/demands/volunteer/ranking')
 }
 
 // 获取本周服务量趋势
-export const getWeeklyServiceTrend = () => {
-  return api.get('/api/admin/volunteers/weekly-service-volume')
+export const getWeeklyServiceTrend = (options = {}) => {
+  return api.get('/api/admin/volunteers/weekly-service-volume', {
+    signal: options.signal
+  })
 }
 
 // 投诉管理API
@@ -392,6 +382,23 @@ export const getTaskStats = () => {
 // 获取每日任务状态统计
 export const getDailyStatusStats = () => {
   return api.get('/api/demands/daily-status-stats')
+}
+
+// 今日任务统计API
+
+// 获取今日任务总数
+export const getTodayTaskCount = () => {
+  return api.get('/api/admin/demands/today/count')
+}
+
+// 获取今日进行中的任务数
+export const getTodayInProgressCount = () => {
+  return api.get('/api/admin/demands/today/in-progress')
+}
+
+// 获取今日已完成的任务数
+export const getTodayCompletedCount = () => {
+  return api.get('/api/admin/demands/today/completed')
 }
 
 // 搜索任务

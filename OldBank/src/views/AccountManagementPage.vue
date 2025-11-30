@@ -37,9 +37,6 @@
             class="account-card"
           >
             <div class="account-info">
-              <div class="account-avatar">
-                <div class="avatar-placeholder">{{ account.username.charAt(0) }}</div>
-              </div>
               <div class="account-details">
                 <h4 class="account-name">{{ account.username }}</h4>
                 <p class="account-phone">电话：{{ account.phone }}</p>
@@ -94,9 +91,6 @@
             class="account-card"
           >
             <div class="account-info">
-              <div class="account-avatar">
-                <div class="avatar-placeholder">{{ account.username.charAt(0) }}</div>
-              </div>
               <div class="account-details">
                 <h4 class="account-name">{{ account.username }}</h4>
                 <p class="account-phone">电话：{{ account.phone }}</p>
@@ -112,8 +106,9 @@
                 @change="updateRole(account.id, account.adminLevel)"
                 :disabled="!canModifyPermissions || account.adminLevel === 'SUPER_ADMIN'"
               >
-                <option value="JUNIOR_ADMIN">初级管理员</option>
+                <option value="ADMIN">普通管理员</option>
                 <option value="SENIOR_ADMIN">高级管理员</option>
+                <option value="SUPER_ADMIN">超级管理员</option>
               </select>
               <button 
                 class="action-btn delete-btn"
@@ -183,7 +178,7 @@ export default {
     filteredActiveAccounts() {
       // 权限设置区域只显示已审核通过的账号
       const approvedAccounts = this.activeAccounts.filter(account => 
-        account.approvalStatus === 1 // 审核状态为1表示已通过
+        account.approvalStatus === 'APPROVED' || account.approvalStatus === 1 // 兼容字符串和数字格式
       )
       
       if (!this.searchKeyword) return approvedAccounts
@@ -199,21 +194,164 @@ export default {
       this.loading = true
       try {
         // 获取待审核账号列表
+        console.log('🔄 开始请求待审核账号列表...')
         const pendingResponse = await getPendingAccounts()
-        if (pendingResponse.code === 200) {
-          this.pendingAccounts = pendingResponse.data || []
+        console.log('📥 待审核账号完整响应:', JSON.stringify(pendingResponse, null, 2))
+        
+        // 检查响应结构
+        if (!pendingResponse) {
+          console.error('❌ 待审核账号响应为空')
+          this.pendingAccounts = []
+        } else if (pendingResponse.code === 200) {
+          console.log('✅ 待审核账号响应成功，检查数据结构...')
+          
+          let pendingData = pendingResponse.data
+          console.log('📊 待审核账号原始数据类型:', typeof pendingData)
+          console.log('📊 待审核账号原始数据:', pendingData)
+          
+          // 尝试不同的数据结构
+          if (Array.isArray(pendingData)) {
+            console.log('✅ 数据是数组格式，直接使用')
+          } else if (pendingData && typeof pendingData === 'object') {
+            // 可能是 { list: [...] } 或 { records: [...] } 结构
+            if (Array.isArray(pendingData.list)) {
+              pendingData = pendingData.list
+              console.log('✅ 数据在 list 字段中')
+            } else if (Array.isArray(pendingData.records)) {
+              pendingData = pendingData.records
+              console.log('✅ 数据在 records 字段中')
+            } else if (Array.isArray(pendingData.content)) {
+              pendingData = pendingData.content
+              console.log('✅ 数据在 content 字段中')
+            } else {
+              console.warn('⚠️ 对象格式未识别，尝试转换为数组')
+              pendingData = Object.values(pendingData)
+            }
+          } else if (typeof pendingData === 'string') {
+            console.log('📝 数据是字符串，尝试解析JSON')
+            try {
+              const parsed = JSON.parse(pendingData)
+              pendingData = Array.isArray(parsed) ? parsed : []
+            } catch (parseError) {
+              console.error('❌ JSON解析失败:', parseError)
+              pendingData = []
+            }
+          } else {
+            console.warn('⚠️ 数据格式未知，设为空数组')
+            pendingData = []
+          }
+          
+          // 最终确保是数组
+          if (!Array.isArray(pendingData)) {
+            console.warn('⚠️ 最终数据不是数组:', pendingData, '设为空数组')
+            pendingData = []
+          }
+          
+          console.log('✅ 待审核账号最终数据长度:', pendingData.length)
+          this.pendingAccounts = pendingData.map((account, index) => {
+            console.log(`👤 处理账号 ${index}:`, account)
+            return {
+              ...account,
+              username: account.username || account.userName || '未知用户',
+              phone: account.phone || account.phoneNumber || '未知电话',
+              adminLevel: account.level || account.adminLevel || 'ADMIN',
+              adminLevelDesc: account.levelDescription || account.adminLevelDesc || account.adminLevelName || account.roleName || '未设置',
+              approvalStatus: account.approvalStatus || 'PENDING',
+              approvalStatusText: account.approvalStatusDescription || account.approvalStatusText || account.statusText || '未知状态',
+              createTime: account.createTime || account.registerTime || account.create_date || '未知时间'
+            }
+          })
+        } else {
+          console.error('❌ 待审核账号响应失败:', pendingResponse)
+          this.pendingAccounts = []
         }
         
         // 获取所有账号列表
+        console.log('🔄 开始请求所有账号列表...')
         const allResponse = await getAllAccounts()
-        if (allResponse.code === 200) {
-          this.activeAccounts = allResponse.data || []
+        console.log('📥 所有账号完整响应:', JSON.stringify(allResponse, null, 2))
+        
+        if (!allResponse) {
+          console.error('❌ 所有账号响应为空')
+          this.activeAccounts = []
+        } else if (allResponse.code === 200) {
+          console.log('✅ 所有账号响应成功，检查数据结构...')
+          
+          let allData = allResponse.data
+          console.log('📊 所有账号原始数据类型:', typeof allData)
+          console.log('📊 所有账号原始数据:', allData)
+          
+          // 尝试不同的数据结构
+          if (Array.isArray(allData)) {
+            console.log('✅ 数据是数组格式，直接使用')
+          } else if (allData && typeof allData === 'object') {
+            // 可能是 { list: [...] } 或 { records: [...] } 结构
+            if (Array.isArray(allData.list)) {
+              allData = allData.list
+              console.log('✅ 数据在 list 字段中')
+            } else if (Array.isArray(allData.records)) {
+              allData = allData.records
+              console.log('✅ 数据在 records 字段中')
+            } else if (Array.isArray(allData.content)) {
+              allData = allData.content
+              console.log('✅ 数据在 content 字段中')
+            } else {
+              console.warn('⚠️ 对象格式未识别，尝试转换为数组')
+              allData = Object.values(allData)
+            }
+          } else if (typeof allData === 'string') {
+            console.log('📝 数据是字符串，尝试解析JSON')
+            try {
+              const parsed = JSON.parse(allData)
+              allData = Array.isArray(parsed) ? parsed : []
+            } catch (parseError) {
+              console.error('❌ JSON解析失败:', parseError)
+              allData = []
+            }
+          } else {
+            console.warn('⚠️ 数据格式未知，设为空数组')
+            allData = []
+          }
+          
+          // 最终确保是数组
+          if (!Array.isArray(allData)) {
+            console.warn('⚠️ 最终数据不是数组:', allData, '设为空数组')
+            allData = []
+          }
+          
+          console.log('✅ 所有账号最终数据长度:', allData.length)
+          this.activeAccounts = allData.map((account, index) => {
+            console.log(`👤 处理账号 ${index}:`, account)
+            return {
+              ...account,
+              username: account.username || account.userName || '未知用户',
+              phone: account.phone || account.phoneNumber || '未知电话',
+              adminLevel: account.level || account.adminLevel || 'ADMIN',
+              adminLevelDesc: account.levelDescription || account.adminLevelDesc || account.adminLevelName || account.roleName || '未设置',
+              approvalStatus: account.approvalStatus || 'APPROVED',
+              approvalStatusText: account.approvalStatusDescription || account.approvalStatusText || account.statusText || '未知状态',
+              createTime: account.createTime || account.registerTime || account.create_date || '未知时间'
+            }
+          })
+        } else {
+          console.error('❌ 所有账号响应失败:', allResponse)
+          this.activeAccounts = []
         }
       } catch (error) {
-        console.error('加载账号列表失败:', error)
-        alert('加载账号列表失败，请检查网络连接')
+        console.error('❌ 加载账号列表异常:', error)
+        console.error('❌ 错误详情:', {
+          message: error.message,
+          stack: error.stack,
+          response: error.response
+        })
+        // 不再弹出alert，改为只在控制台输出
+        this.pendingAccounts = []
+        this.activeAccounts = []
       } finally {
         this.loading = false
+        console.log('✅ 账号加载完成')
+        console.log('📊 最终待审核账号数量:', this.pendingAccounts.length)
+        console.log('📊 最终所有账号数量:', this.activeAccounts.length)
       }
     },
     
@@ -221,9 +359,9 @@ export default {
       if (!this.canApproveAccounts) return
       
       // 让用户选择审核通过的权限级别
-      const adminLevel = this.isSuperAdmin ? 'SENIOR_ADMIN' : 'JUNIOR_ADMIN'
+      const adminLevel = this.isSuperAdmin ? 'ADMIN' : 'ADMIN'
       
-      if (confirm(`确定要通过此账号的审核吗？审核级别：${adminLevel === 'SENIOR_ADMIN' ? '高级管理员' : '初级管理员'}`)) {
+      if (confirm(`确定要通过此账号的审核吗？审核级别：${this.getLevelDescription(adminLevel)}`)) {
         try {
           const response = await approveAccount(id, 1, '审核通过', adminLevel)
           if (response.code === 200) {
@@ -261,11 +399,24 @@ export default {
       }
     },
     
+    getLevelDescription(level) {
+      switch (level) {
+        case 'SUPER_ADMIN':
+          return '超级管理员'
+        case 'SENIOR_ADMIN':
+          return '高级管理员'
+        case 'ADMIN':
+          return '普通管理员'
+        default:
+          return '普通管理员'
+      }
+    },
+    
     updateRole(id, adminLevel) {
       if (!this.canModifyPermissions) return
       console.log('更新账号权限:', id, adminLevel)
       // 这里调用API更新账号角色
-      alert(`账号权限已更新为：${adminLevel === 'SENIOR_ADMIN' ? '高级管理员' : '初级管理员'}`)
+      alert(`账号权限已更新为：${this.getLevelDescription(adminLevel)}`)
     },
     
     deleteAccount(id) {
@@ -405,22 +556,7 @@ export default {
 .account-info {
   display: flex;
   align-items: center;
-  gap: 16px;
   flex: 1;
-}
-
-.account-avatar {
-  width: 50px;
-  height: 50px;
-  border-radius: 50%;
-  overflow: hidden;
-  flex-shrink: 0;
-}
-
-.account-avatar img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
 }
 
 .account-details {

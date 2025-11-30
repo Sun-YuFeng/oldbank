@@ -273,7 +273,7 @@ export default {
         },
         xAxis: {
           type: 'category',
-          data: data.map(item => item.label),
+          data: data.map(item => item.name || item.label),
           axisLine: {
             lineStyle: {
               color: '#e2e8f0'

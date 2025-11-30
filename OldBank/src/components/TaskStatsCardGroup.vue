@@ -2,26 +2,55 @@
  <template>
   <div class="stats-container">
     <div class="stats-card">
-      <div class="card-title">总任务数</div>
+      <div class="card-title">今日总任务数</div>
       <div class="card-value">{{ totalTasks }}</div>
     </div>
     <div class="stats-card">
-      <div class="card-title">待审核</div>
-      <div class="card-value pending">{{ pendingTasks }}</div>
+      <div class="card-title">进行中</div>
+      <div class="card-value pending">{{ underWay }}</div>
     </div>
     <div class="stats-card">
-      <div class="card-title">平均信用分</div>
-      <div class="card-value">{{ averageScore }}</div>
+      <div class="card-title">已完成</div>
+      <div class="card-value">{{ finish }}</div>
     </div>
   </div>
 </template>
 
 <script setup>
-import { ref } from 'vue'
+import { ref, onMounted } from 'vue'
+import { getTodayTaskCount, getTodayInProgressCount, getTodayCompletedCount } from '@/utils/api'
 
-const totalTasks = ref(20)
-const pendingTasks = ref(3)
-const averageScore = ref(114)
+const totalTasks = ref(0)
+const underWay = ref(0)
+const finish = ref(0)
+
+const loadTodayStats = async () => {
+  try {
+    // 并行请求三个接口提高效率
+    const [totalResponse, inProgressResponse, completedResponse] = await Promise.all([
+      getTodayTaskCount(),
+      getTodayInProgressCount(),
+      getTodayCompletedCount()
+    ])
+    
+    totalTasks.value = totalResponse.data || 0
+    underWay.value = inProgressResponse.data || 0
+    finish.value = completedResponse.data || 0
+    
+    console.log('今日任务统计数据:', {
+      total: totalTasks.value,
+      inProgress: underWay.value,
+      completed: finish.value
+    })
+  } catch (error) {
+    console.error('获取今日任务统计失败:', error)
+    // 保持默认值0，不显示错误给用户
+  }
+}
+
+onMounted(() => {
+  loadTodayStats()
+})
 </script>
 
 <style scoped>

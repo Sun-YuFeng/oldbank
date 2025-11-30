@@ -5,7 +5,11 @@
     
     <!-- 主内容区域 -->
     <div class="main-content" :class="{ 'full-width': !showSidebar }">
-      <router-view /> 
+      <router-view v-slot="{ Component }">
+        <keep-alive include="DashBoardView">
+          <component :is="Component" />
+        </keep-alive>
+      </router-view>
     </div>
     
     <!-- 右下角浮动按钮（仅在登录后显示） -->

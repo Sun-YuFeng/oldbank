@@ -44,8 +44,9 @@
             <th class="checkbox-column">
               <input type="checkbox" class="table-checkbox">
             </th>
+            <th class="ranking-column">排名</th>
             <th class="name-column">姓名</th>
-            <th class="score-column">信用分</th>
+            <th class="score-column">暖龄币</th>
             <th class="service-column">服务次数</th>
             <th class="action-column">操作</th>
           </tr>
@@ -54,6 +55,11 @@
           <tr v-for="volunteer in volunteers" :key="volunteer.id" class="table-row">
             <td class="checkbox-cell">
               <input type="checkbox" class="table-checkbox">
+            </td>
+            <td class="ranking-cell">
+              <div class="ranking-badge" :class="getRankingClass(volunteer.ranking)">
+                {{ volunteer.ranking || '-' }}
+              </div>
             </td>
             <td class="name-cell">
               <div class="user-info">
@@ -131,7 +137,8 @@ export default {
   name: 'VolunteerTable',
   data() {
     return {
-      volunteers: [],
+      allVolunteers: [], // 存储所有志愿者数据
+      volunteers: [], // 显示过滤后的数据
       loading: false,
       unauthorized: false,
       pagination: {
@@ -150,55 +157,54 @@ export default {
     async fetchVolunteers() {
       this.loading = true;
       try {
-        console.log('🎯 开始请求志愿者列表API');
-        console.log('📋 请求参数:', {
-          page: this.pagination.currentPage,
-          pageSize: this.pagination.pageSize,
-          search: this.searchQuery
-        });
+        console.log('🎯 开始请求志愿者活跃度排名API');
         
-        const response = await getVolunteerRanking(
-          this.pagination.currentPage, 
-          this.pagination.pageSize, 
-          this.searchQuery
-        );
+        const response = await getVolunteerRanking();
         
         console.log('✅ API响应数据:', response);
         console.log('📊 响应结构:', {
           code: response.code,
           message: response.message,
-          dataLength: response.data ? Object.keys(response.data) : 'null',
-          contentLength: response.data?.content?.length || 0
+          dataLength: response.data?.length || 0
         });
         
         if (response.code === 200) {
           console.log('📦 实际数据内容:', response.data);
-          console.log('👥 志愿者数据:', response.data || []);
           
-          // API返回的数据直接是数组，没有content包装
-          this.volunteers = response.data || [];
-          this.pagination.totalElements = response.data.length || 0;
-          this.pagination.totalPages = Math.ceil(response.data.length / this.pagination.pageSize) || 0;
+          // 新API返回的数据结构：userId, username, warmCoin, serviceCount, ranking
+          // 需要转换为组件期望的格式：id, name, creditScore, serviceCount
+          this.allVolunteers = (response.data || []).map(volunteer => ({
+            id: volunteer.userId,
+            name: volunteer.username,
+            creditScore: volunteer.warmCoin, // 暖龄币作为信用分显示
+            serviceCount: volunteer.serviceCount,
+            ranking: volunteer.ranking // 保留排名信息
+          }));
+          
+          // 应用搜索过滤
+          this.applySearchFilter();
           
           console.log('📈 处理后数据状态:', {
-            volunteersCount: this.volunteers.length,
+            allVolunteersCount: this.allVolunteers.length,
+            displayedVolunteersCount: this.volunteers.length,
             totalElements: this.pagination.totalElements,
             totalPages: this.pagination.totalPages
           });
         } else {
-          console.error('❌ 获取志愿者列表失败:', response);
+          console.error('❌ 获取志愿者排名失败:', response);
           console.error('📝 错误详情:', response.message);
           // 如果接口调用失败，使用默认值
-          this.volunteers = [
+          this.allVolunteers = [
             { id: 1, name: '张伟', creditScore: 850, serviceCount: 42 },
             { id: 2, name: '李娜', creditScore: 820, serviceCount: 38 },
             { id: 3, name: '王芳', creditScore: 790, serviceCount: 35 },
             { id: 4, name: '赵强', creditScore: 780, serviceCount: 32 },
             { id: 5, name: '刘洋', creditScore: 760, serviceCount: 30 }
           ];
+          this.applySearchFilter();
         }
       } catch (error) {
-        console.error('🚨 获取志愿者列表出错:', error);
+        console.error('🚨 获取志愿者排名出错:', error);
         console.error('🔍 错误详情:', {
           code: error.code,
           message: error.message,
@@ -214,13 +220,14 @@ export default {
         } else {
           console.warn('🔄 使用默认数据');
           // 其他错误使用默认值
-          this.volunteers = [
+          this.allVolunteers = [
             { id: 1, name: '张伟', creditScore: 850, serviceCount: 42 },
             { id: 2, name: '李娜', creditScore: 820, serviceCount: 38 },
             { id: 3, name: '王芳', creditScore: 790, serviceCount: 35 },
             { id: 4, name: '赵强', creditScore: 780, serviceCount: 32 },
             { id: 5, name: '刘洋', creditScore: 760, serviceCount: 30 }
           ];
+          this.applySearchFilter();
         }
       } finally {
         this.loading = false;
@@ -228,14 +235,40 @@ export default {
       }
     },
     
-    handleSearch() {
+    applySearchFilter() {
+      // 如果没有搜索关键字，显示所有数据
+      if (!this.searchQuery || this.searchQuery.trim() === '') {
+        this.volunteers = [...this.allVolunteers];
+      } else {
+        // 根据用户名进行过滤
+        const searchTerm = this.searchQuery.toLowerCase().trim();
+        this.volunteers = this.allVolunteers.filter(volunteer => 
+          volunteer.name.toLowerCase().includes(searchTerm)
+        );
+      }
+      
+      // 更新分页信息
+      this.pagination.totalElements = this.volunteers.length;
+      this.pagination.totalPages = Math.ceil(this.volunteers.length / this.pagination.pageSize) || 0;
+      
+      // 重置到第一页
       this.pagination.currentPage = 1;
-      this.fetchVolunteers();
+    },
+    
+    getRankingClass(ranking) {
+      if (ranking === 1) return 'gold';
+      if (ranking === 2) return 'silver';
+      if (ranking === 3) return 'bronze';
+      return '';
+    },
+    
+    handleSearch() {
+      this.applySearchFilter();
     },
     
     handlePageChange(page) {
       this.pagination.currentPage = page;
-      this.fetchVolunteers();
+      // 分页只是前端显示切换，不需要重新请求数据
     },
     
     handleViewDetail(volunteer) {
@@ -464,6 +497,11 @@ export default {
   width: 48px;
 }
 
+.ranking-column {
+  width: 80px;
+  text-align: center;
+}
+
 /* 表格行样式 */
 .table-row {
   border-bottom: 1px solid #f9fafb;
@@ -612,5 +650,43 @@ export default {
 
 .login-button:hover {
   background: #2563eb;
+}
+
+/* 排名徽章样式 */
+.ranking-cell {
+  text-align: center;
+  vertical-align: middle;
+}
+
+.ranking-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  font-weight: bold;
+  font-size: 13px;
+  background: #6b7280;
+  color: white;
+  border-radius: 16px;
+}
+
+.ranking-badge.gold {
+  background: linear-gradient(135deg, #FFD700, #FFA500);
+  color: white;
+  box-shadow: 0 2px 4px rgba(255, 215, 0, 0.3);
+}
+
+.ranking-badge.silver {
+  background: linear-gradient(135deg, #C0C0C0, #808080);
+  color: white;
+  box-shadow: 0 2px 4px rgba(192, 192, 192, 0.3);
+}
+
+.ranking-badge.bronze {
+  background: linear-gradient(135deg, #CD7F32, #8B4513);
+  color: white;
+  box-shadow: 0 2px 4px rgba(205, 127, 50, 0.3);
 }
 </style>

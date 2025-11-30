@@ -74,6 +74,10 @@ export default {
   mounted() {
     this.fetchDashboardStats();
   },
+  activated() {
+    // 使用keep-alive时，组件重新激活时重新获取数据
+    this.fetchDashboardStats();
+  },
   methods: {
     async fetchDashboardStats() {
       this.loading = true;
