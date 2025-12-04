@@ -20,16 +20,26 @@
         <div class="filters">
           <select class="filter-select" v-model="roleFilter">
             <option value="">所有角色</option>
-            <option value="管理员">管理员</option>
-            <option value="志愿者">志愿者</option>
-            <option value="需求者">需求者</option>
+            <option 
+              v-for="role in roleOptions" 
+              :key="role.value" 
+              :value="role.value"
+              :title="role.description"
+            >
+              {{ role.label }}
+            </option>
           </select>
 
           <select class="filter-select" v-model="statusFilter">
             <option value="">所有状态</option>
-            <option value="活跃">活跃</option>
-            <option value="禁用">禁用</option>
-            <option value="待审核">待审核</option>
+            <option 
+              v-for="status in statusOptions" 
+              :key="status.value" 
+              :value="status.value"
+              :title="status.description"
+            >
+              {{ status.label }}
+            </option>
           </select>
         </div>
 
@@ -81,7 +91,7 @@
               </td>
               <td class="register-time">{{ user.registerTime || user.createTime || 'N/A' }}</td>
               <td class="actions">
-                <button class="action-btn edit-btn">详情</button>
+                <button class="action-btn edit-btn" @click="handleViewUserDetail(user)">详情</button>
                 <button 
                   v-if="isUserBanned(user.status)"
                   class="action-btn unban-btn"
@@ -134,7 +144,7 @@
 </template>
 
 <script>
-import { getUserList, getUserCount, getUserListWithFilters, banUser, softDeleteUser } from '@/utils/api'
+import { getUserList, getUserCount, searchUsers, getUserDetail, getUserFilterOptions, banUser, softDeleteUser } from '@/utils/api'
 import BanConfirmModal from './BanConfirmModal.vue'
 
 export default {
@@ -154,6 +164,10 @@ export default {
       statusFilter: '',
       searchTimer: null,
       
+      // 筛选选项
+      roleOptions: [],
+      statusOptions: [],
+      
       // 封禁相关
       banModalVisible: false,
       selectedUser: null,
@@ -172,35 +186,62 @@ export default {
     }
   },
   async mounted() {
+    await this.loadFilterOptions()
     await this.fetchUserList()
   },
   methods: {
+    // 加载筛选选项
+    async loadFilterOptions() {
+      try {
+        const response = await getUserFilterOptions()
+        if (response.code === 200) {
+          this.roleOptions = response.data.roles || []
+          this.statusOptions = response.data.statuses || []
+          console.log('筛选选项加载成功:', { roles: this.roleOptions, statuses: this.statusOptions })
+        }
+      } catch (error) {
+        console.error('加载筛选选项失败:', error)
+        // 设置默认选项，避免页面显示空白
+        this.roleOptions = [
+          { value: 'ELDERLY', label: '需求者', description: '需要帮助的老年人' },
+          { value: 'VOLUNTEER', label: '志愿者', description: '提供志愿服务的用户' }
+        ]
+        this.statusOptions = [
+          { value: 'NORMAL', label: '正常', description: '账户状态正常，可以正常使用' },
+          { value: 'BANNED', label: '已禁用', description: '账户已被禁用，无法登录和使用' }
+        ]
+      }
+    },
+    
     // 统一的数据获取方法
     async fetchUserList() {
       this.loading = true
       try {
-        // 始终使用带参数的方法，传递空的搜索和筛选参数
-        const response = await getUserListWithFilters(
-          this.currentPage, 
-          this.pageSize,
-          this.searchQuery,
-          this.roleFilter,
-          this.statusFilter
+        let response
+        
+        // 统一使用新的用户搜索API
+        const searchQuery = this.searchQuery.trim()
+        
+        // 智能判断：如果输入纯数字且长度≥3，作为手机号搜索；否则作为用户名搜索
+        const isPhoneSearch = /^\d+$/.test(searchQuery) && searchQuery.length >= 3
+        const isUsernameSearch = !isPhoneSearch || searchQuery.length < 3
+        
+        response = await searchUsers(
+          isUsernameSearch ? searchQuery : '', // username参数
+          isPhoneSearch ? searchQuery : '',     // phone参数
+          this.roleFilter,                      // role参数
+          this.statusFilter,                    // status参数
+          this.currentPage,
+          this.pageSize
         )
         
         console.log('获取用户列表响应:', response)
         if (response.code === 200) {
-          // 根据接口文档修正字段名
+          // 根据新API文档修正字段名
           this.userList = response.data.content || []
           
-          // 修正后端返回的totalElements问题：如果有搜索或筛选条件，使用实际返回的数据条数
-          if (this.hasSearchOrFilter()) {
-            // 有搜索条件时，使用实际返回的数据条数作为totalElements
-            this.totalElements = this.userList.length
-          } else {
-            // 没有搜索条件时，使用后端返回的totalElements
-            this.totalElements = response.data.totalElements || 0
-          }
+          // 统一使用新API的total字段
+          this.totalElements = response.data.total || 0
           
           // 检查当前页码是否超出范围，如果超出则重置到第一页
           const totalPages = Math.ceil(this.totalElements / this.pageSize)
@@ -360,6 +401,109 @@ export default {
     // 封禁取消回调
     handleBanCancel() {
       this.selectedUser = null
+    },
+    
+    // 查看用户详情
+    async handleViewUserDetail(user) {
+      try {
+        console.log('正在获取用户详情，用户ID:', user.id)
+        const response = await getUserDetail(user.id)
+        
+        if (response.code === 200) {
+          const userDetail = response.data
+          
+          // 创建一个美观的弹窗显示用户详情
+          const detailHtml = `
+            <div style="max-width: 500px; font-family: Arial, sans-serif;">
+              <h3 style="margin-bottom: 20px; color: #1e293b; border-bottom: 2px solid #e2e8f0; padding-bottom: 10px;">
+                用户详细信息
+              </h3>
+              <table style="width: 100%; border-collapse: collapse;">
+                <tr style="border-bottom: 1px solid #f1f5f9;">
+                  <td style="padding: 8px 0; font-weight: 600; color: #374151; width: 120px;">用户名：</td>
+                  <td style="padding: 8px 0; color: #1e293b;">${userDetail.username || 'N/A'}</td>
+                </tr>
+                <tr style="border-bottom: 1px solid #f1f5f9;">
+                  <td style="padding: 8px 0; font-weight: 600; color: #374151;">真实姓名：</td>
+                  <td style="padding: 8px 0; color: #1e293b;">${userDetail.realName || 'N/A'}</td>
+                </tr>
+                <tr style="border-bottom: 1px solid #f1f5f9;">
+                  <td style="padding: 8px 0; font-weight: 600; color: #374151;">手机号：</td>
+                  <td style="padding: 8px 0; color: #1e293b;">${userDetail.phone || 'N/A'}</td>
+                </tr>
+                <tr style="border-bottom: 1px solid #f1f5f9;">
+                  <td style="padding: 8px 0; font-weight: 600; color: #374151;">邮箱：</td>
+                  <td style="padding: 8px 0; color: #1e293b;">${userDetail.email || 'N/A'}</td>
+                </tr>
+                <tr style="border-bottom: 1px solid #f1f5f9;">
+                  <td style="padding: 8px 0; font-weight: 600; color: #374151;">地址：</td>
+                  <td style="padding: 8px 0; color: #1e293b;">${userDetail.address || 'N/A'}</td>
+                </tr>
+                <tr style="border-bottom: 1px solid #f1f5f9;">
+                  <td style="padding: 8px 0; font-weight: 600; color: #374151;">年龄：</td>
+                  <td style="padding: 8px 0; color: #1e293b;">${userDetail.age || 'N/A'}</td>
+                </tr>
+                <tr style="border-bottom: 1px solid #f1f5f9;">
+                  <td style="padding: 8px 0; font-weight: 600; color: #374151;">用户身份：</td>
+                  <td style="padding: 8px 0; color: #1e293b;">${userDetail.userIdentity || 'N/A'}</td>
+                </tr>
+                <tr style="border-bottom: 1px solid #f1f5f9;">
+                  <td style="padding: 8px 0; font-weight: 600; color: #374151;">暖心币：</td>
+                  <td style="padding: 8px 0; color: #1e293b;">${userDetail.warmCoin || 0}</td>
+                </tr>
+                <tr style="border-bottom: 1px solid #f1f5f9;">
+                  <td style="padding: 8px 0; font-weight: 600; color: #374151;">状态：</td>
+                  <td style="padding: 8px 0;">
+                    <span style="padding: 4px 12px; border-radius: 20px; font-size: 12px; font-weight: 500; 
+                      background-color: ${userDetail.banned ? '#fee2e2' : '#dcfce7'}; 
+                      color: ${userDetail.banned ? '#991b1b' : '#166534'};">
+                      ${userDetail.banned ? '已禁用' : '正常'}
+                    </span>
+                  </td>
+                </tr>
+                <tr style="border-bottom: 1px solid #f1f5f9;">
+                  <td style="padding: 8px 0; font-weight: 600; color: #374151;">注册时间：</td>
+                  <td style="padding: 8px 0; color: #1e293b;">${userDetail.createTime || 'N/A'}</td>
+                </tr>
+                <tr>
+                  <td style="padding: 8px 0; font-weight: 600; color: #374151;">最后登录：</td>
+                  <td style="padding: 8px 0; color: #1e293b;">${userDetail.lastLoginTime || 'N/A'}</td>
+                </tr>
+              </table>
+              ${userDetail.banned ? `
+                <div style="margin-top: 15px; padding: 10px; background-color: #fef2f2; border: 1px solid #fecaca; border-radius: 6px;">
+                  <p style="margin: 0; color: #991b1b; font-size: 14px;">
+                    <strong>禁用原因：</strong>${userDetail.banReason || '未填写'}
+                  </p>
+                  ${userDetail.banExpireTime ? `
+                    <p style="margin: 5px 0 0 0; color: #991b1b; font-size: 14px;">
+                      <strong>禁用到期时间：</strong>${userDetail.banExpireTime}
+                    </p>
+                  ` : ''}
+                </div>
+              ` : ''}
+            </div>
+          `
+          
+          // 使用 Element Plus 的 MessageBox 显示详情
+          this.$msgbox({
+            title: '用户详情',
+            message: detailHtml,
+            dangerouslyUseHTMLString: true,
+            showConfirmButton: true,
+            confirmButtonText: '确定',
+            customClass: 'user-detail-dialog'
+          }).catch(() => {
+            // 用户点击取消或关闭弹窗
+          })
+          
+        } else {
+          this.$message.error(response.message || '获取用户详情失败')
+        }
+      } catch (error) {
+        console.error('获取用户详情失败:', error)
+        this.$message.error(error.message || '获取用户详情失败')
+      }
     }
   }
 }
@@ -773,5 +917,28 @@ export default {
     justify-content: center;
     margin-bottom: 8px;
   }
+}
+
+/* 用户详情弹窗样式 */
+:deep(.user-detail-dialog) {
+  max-width: 600px;
+}
+
+:deep(.user-detail-dialog .el-message-box__content) {
+  max-height: 500px;
+  overflow-y: auto;
+}
+
+:deep(.user-detail-dialog table) {
+  font-size: 14px;
+}
+
+:deep(.user-detail-dialog table td) {
+  vertical-align: top;
+  line-height: 1.5;
+}
+
+:deep(.user-detail-dialog table td:first-child) {
+  white-space: nowrap;
 }
 </style>

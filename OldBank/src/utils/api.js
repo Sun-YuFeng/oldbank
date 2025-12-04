@@ -162,30 +162,48 @@ export const getUserList = (pageNumber = 1, pageSize = 9) => {
   })
 }
 
-// 获取用户列表（完整版，可传递搜索和筛选参数）
-export const getUserListWithFilters = (pageNumber = 1, pageSize = 9, searchQuery = '', roleFilter = '', statusFilter = '') => {
+// 用户搜索API - 新版本（支持用户名和手机号搜索）
+
+// 搜索用户
+export const searchUsers = (username = '', phone = '', role = '', status = '', page = 1, pageSize = 10) => {
   const params = {
-    page: pageNumber,
-    pageSize: pageSize
+    page,
+    pageSize
   }
   
   // 只有当参数有值时才添加到请求中
-  if (searchQuery && searchQuery.trim() !== '') {
-    params.search = searchQuery.trim()
+  if (username && username.trim() !== '') {
+    params.username = username.trim()
   }
   
-  if (roleFilter && roleFilter !== '') {
-    params.role = roleFilter
+  if (phone && phone.trim() !== '') {
+    params.phone = phone.trim()
   }
   
-  if (statusFilter && statusFilter !== '') {
-    params.status = statusFilter
+  if (role && role.trim() !== '') {
+    params.role = role.trim()
   }
   
-  return api.get('/api/users', {
+  if (status && status.trim() !== '') {
+    params.status = status.trim()
+  }
+  
+  return api.get('/api/admin/user-search', {
     params
   })
 }
+
+// 获取用户详细信息
+export const getUserDetail = (userId) => {
+  return api.get(`/api/admin/user-search/${userId}`)
+}
+
+// 获取用户筛选选项
+export const getUserFilterOptions = () => {
+  return api.get('/api/admin/user-search/filter-options')
+}
+
+
 
 // 获取用户总数
 export const getUserCount = (includeDeleted = false) => {
@@ -252,10 +270,7 @@ export const hardDeleteUser = (userId, reason = '') => {
   })
 }
 
-// 获取用户详情
-export const getUserDetail = (userId) => {
-  return api.get(`/api/users/${userId}`)
-}
+
 
 // 恢复已删除用户
 export const restoreUser = (userId) => {
