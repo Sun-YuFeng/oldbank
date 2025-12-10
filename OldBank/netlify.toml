@@ -2,6 +2,10 @@
   command = "npm run build"
   publish = "dist"
 
+[context.production.environment]
+  VITE_API_BASE_URL = "http://120.27.228.214:8080/silveragepass"
+  VITE_APP_TITLE = "银龄通管理系统"
+
 [[redirects]]
   from = "/*"
   to = "/index.html"
