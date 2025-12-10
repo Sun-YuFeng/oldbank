@@ -17,7 +17,7 @@
     "@iconscout/unicons": "^4.2.0",
     "axios": "^1.12.2",
     "chart.js": "^4.5.0",
-    "echarts": "^6.0.0",
+    "echarts": "^5.5.1",
     "element-plus": "^2.11.7",
     "font-awesome": "^4.7.0",
     "pinia": "^3.0.3",

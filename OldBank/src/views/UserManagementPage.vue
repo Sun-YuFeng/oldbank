@@ -60,7 +60,11 @@ export default {
   },
   beforeUnmount() {
     if (this.chartInstance) {
+      if (this.resizeHandler) {
+        window.removeEventListener('resize', this.resizeHandler)
+      }
       this.chartInstance.dispose()
+      this.chartInstance = null
     }
   },
   methods: {
@@ -122,20 +126,25 @@ export default {
       const chartDom = this.$refs.userCreationChart
       if (!chartDom) {
         console.error('图表容器未找到')
-        // 如果重试次数小于3次，则重试
         if (retryCount < 3) {
-          console.log(`重试图表初始化，第${retryCount + 1}次`)
           setTimeout(() => this.initChart(retryCount + 1), 200)
         }
         return
       }
       
-      // 确保容器有内容
-      if (chartDom.clientHeight === 0) {
-        console.warn('图表容器高度为0，等待DOM更新')
+      // 确保容器有尺寸
+      if (chartDom.clientWidth === 0 || chartDom.clientHeight === 0) {
+        console.warn('图表容器尺寸为0，等待DOM更新')
         if (retryCount < 3) {
           setTimeout(() => this.initChart(retryCount + 1), 100)
         }
+        return
+      }
+      
+      // 数据校验
+      if (!this.chartData || !this.chartData.dates || !this.chartData.counts || 
+          this.chartData.dates.length === 0 || this.chartData.counts.length === 0) {
+        console.warn('图表数据不完整，无法初始化图表')
         return
       }
       
@@ -144,29 +153,34 @@ export default {
         this.chartInstance.dispose()
       }
       
+      // 初始化图表实例
       this.chartInstance = echarts.init(chartDom)
       
-      // 打印图表数据用于调试
       console.log('图表初始化数据:', this.chartData)
       
       const option = {
         tooltip: {
-          trigger: 'item',
-          backgroundColor: 'rgba(0, 0, 0, 0.8)',
+          trigger: 'axis', // 改为axis触发，更符合折线图
+          backgroundColor: 'rgba(255, 255, 255, 0.95)',
           borderColor: '#3b82f6',
           borderWidth: 1,
           textStyle: {
-            color: '#fff',
+            color: '#1e293b',
             fontSize: 12
           },
           formatter: function(params) {
-            return `${params.name}<br/>创号人数: <span style="color: #3b82f6; font-weight: bold">${params.value}人</span>`
+            if (params && params.length > 0) {
+              const param = params[0]
+              return `${param.name}<br/>创号人数: <span style="color: #3b82f6; font-weight: bold">${param.value}人</span>`
+            }
+            return ''
           }
         },
         grid: {
           left: '3%',
           right: '4%',
           bottom: '3%',
+          top: '10%',
           containLabel: true
         },
         xAxis: {
@@ -239,12 +253,24 @@ export default {
         ]
       }
       
-      this.chartInstance.setOption(option)
+      try {
+        this.chartInstance.setOption(option, true)
+      } catch (error) {
+        console.error('设置图表配置失败:', error)
+        // 如果设置配置失败，尝试重新初始化
+        if (retryCount < 3) {
+          setTimeout(() => this.initChart(retryCount + 1), 500)
+        }
+        return
+      }
       
       // 响应式调整
-      window.addEventListener('resize', () => {
-        this.chartInstance.resize()
-      })
+      this.resizeHandler = () => {
+        if (this.chartInstance && !this.chartInstance.isDisposed()) {
+          this.chartInstance.resize()
+        }
+      }
+      window.addEventListener('resize', this.resizeHandler)
       
       console.log('图表初始化完成')
     }

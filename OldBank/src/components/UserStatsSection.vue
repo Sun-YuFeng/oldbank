@@ -66,10 +66,12 @@ export default {
     if (this.roleChart) {
       window.removeEventListener('resize', this.handleRoleChartResize)
       this.roleChart.dispose()
+      this.roleChart = null
     }
     if (this.statusChart) {
       window.removeEventListener('resize', this.handleStatusChartResize)
       this.statusChart.dispose()
+      this.statusChart = null
     }
   },
   methods: {
@@ -143,53 +145,63 @@ export default {
       const chartDom = this.$refs.roleChart
       if (!chartDom) {
         console.warn('角色图表DOM未找到')
-        // 如果重试次数小于3次，则重试
         if (retryCount < 3) {
-          console.log(`重试图表初始化，第${retryCount + 1}次`)
           setTimeout(() => this.initRoleChart(retryCount + 1), 200)
         }
         return
       }
       
-      // 确保容器有内容
-      if (chartDom.clientHeight === 0) {
-        console.warn('图表容器高度为0，等待DOM更新')
+      // 确保容器有尺寸
+      if (chartDom.clientWidth === 0 || chartDom.clientHeight === 0) {
+        console.warn('图表容器尺寸为0，等待DOM更新')
         if (retryCount < 3) {
           setTimeout(() => this.initRoleChart(retryCount + 1), 100)
         }
         return
       }
       
-      // 数据校验，避免空数据导致图表异常
-      if (this.roleData.length === 0) {
+      // 数据校验
+      if (!this.roleData || this.roleData.length === 0) {
         console.warn('角色数据为空，无法初始化图表')
         return
       }
-      
-      console.log('初始化角色图表，数据:', this.roleData)
-      console.log('X轴数据:', this.roleData.map(item => item.label))
-      console.log('Y轴数据:', this.roleData.map(item => item.value))
       
       // 如果已有图表实例，先销毁
       if (this.roleChart) {
         this.roleChart.dispose()
       }
       
+      // 初始化图表实例
       this.roleChart = echarts.init(chartDom)
       
       const option = this.getChartOption(this.roleData, '#8b5cf6')
       
-      this.roleChart.setOption(option)
+      try {
+        this.roleChart.setOption(option, true)
+      } catch (error) {
+        console.error('设置角色图表配置失败:', error)
+        // 如果设置配置失败，尝试重新初始化
+        if (retryCount < 3) {
+          setTimeout(() => this.initRoleChart(retryCount + 1), 500)
+        }
+        return
+      }
       
       // 添加窗口resize监听
       window.addEventListener('resize', this.handleRoleChartResize)
       
-      console.log('角色图表设置完成，检查图表是否显示')
+      console.log('角色图表初始化完成')
     },
     
     handleRoleChartResize() {
-      if (this.roleChart) {
+      if (this.roleChart && !this.roleChart.isDisposed()) {
         this.roleChart.resize()
+      }
+    },
+
+    handleStatusChartResize() {
+      if (this.statusChart && !this.statusChart.isDisposed()) {
+        this.statusChart.resize()
       }
     },
     
@@ -197,43 +209,52 @@ export default {
       const chartDom = this.$refs.statusChart
       if (!chartDom) {
         console.warn('状态图表DOM未找到')
-        // 如果重试次数小于3次，则重试
         if (retryCount < 3) {
-          console.log(`重试图表初始化，第${retryCount + 1}次`)
           setTimeout(() => this.initStatusChart(retryCount + 1), 200)
         }
         return
       }
       
-      // 确保容器有内容
-      if (chartDom.clientHeight === 0) {
-        console.warn('图表容器高度为0，等待DOM更新')
+      // 确保容器有尺寸
+      if (chartDom.clientWidth === 0 || chartDom.clientHeight === 0) {
+        console.warn('图表容器尺寸为0，等待DOM更新')
         if (retryCount < 3) {
           setTimeout(() => this.initStatusChart(retryCount + 1), 100)
         }
         return
       }
       
-      // 数据校验，避免空数据导致图表异常
-      if (this.statusData.length === 0) {
+      // 数据校验
+      if (!this.statusData || this.statusData.length === 0) {
         console.warn('状态数据为空，无法初始化图表')
         return
       }
-      
-      console.log('初始化状态图表，数据:', this.statusData)
-      console.log('X轴数据:', this.statusData.map(item => item.label))
-      console.log('Y轴数据:', this.statusData.map(item => item.value))
       
       // 如果已有图表实例，先销毁
       if (this.statusChart) {
         this.statusChart.dispose()
       }
       
+      // 初始化图表实例
       this.statusChart = echarts.init(chartDom)
       
       const option = this.getChartOption(this.statusData, '#10b981')
       
-      this.statusChart.setOption(option)
+      try {
+        this.statusChart.setOption(option, true)
+      } catch (error) {
+        console.error('设置状态图表配置失败:', error)
+        // 如果设置配置失败，尝试重新初始化
+        if (retryCount < 3) {
+          setTimeout(() => this.initStatusChart(retryCount + 1), 500)
+        }
+        return
+      }
+      
+      // 添加窗口resize监听
+      window.addEventListener('resize', this.handleStatusChartResize)
+      
+      console.log('状态图表初始化完成')
     },
     
     // 公共图表配置函数

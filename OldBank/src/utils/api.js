@@ -502,4 +502,9 @@ export const adjustUserPoints = (userId, amount, reason) => {
   })
 }
 
+// 获取公益池信息
+export const getCharityPoolInfo = () => {
+  return api.get('/api/warm-coin-records/charity-pool/info')
+}
+
 export default api

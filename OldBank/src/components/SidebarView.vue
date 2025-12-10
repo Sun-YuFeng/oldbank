@@ -42,6 +42,12 @@
           </router-link>
         </li>
         <li>
+          <router-link to="/public-welfare-pool" class="nav-item" active-class="active">
+            <i class="uil uil-heart nav-icon"></i>
+            <span>公益池管理</span>
+          </router-link>
+        </li>
+        <li>
           <router-link to="/system-settings" class="nav-item" active-class="active">
             <i class="uil uil-setting nav-icon"></i>
             <span>系统设置</span>
