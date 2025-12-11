@@ -2,11 +2,10 @@ import axios from 'axios'
 
 // API基础配置
 const getApiConfig = () => {
-  // 开发环境下使用相对路径（由vite代理处理）
-  // 生产环境下直接使用实际服务器地址
-  const baseURL = import.meta.env.DEV 
-    ? '' 
-    : (import.meta.env.VITE_API_BASE_URL || 'http://120.27.228.214:8080/silveragepass')
+  // 部署到 Netlify 后，使用 Netlify 的重定向/代理功能
+  // 开发环境：使用相对路径（由vite代理处理）
+  // 生产环境：也使用相对路径（由Netlify代理处理）
+  const baseURL = ''
   
   return {
     baseURL,
