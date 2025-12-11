@@ -6,7 +6,7 @@ const getApiConfig = () => {
   // 生产环境下直接使用实际服务器地址
   const baseURL = import.meta.env.DEV 
     ? '' 
-    : (import.meta.env.VITE_API_BASE_URL || 'https://120.27.228.214:8080/silveragepass')
+    : (import.meta.env.VITE_API_BASE_URL || 'http://120.27.228.214:8080/silveragepass')
   
   return {
     baseURL,

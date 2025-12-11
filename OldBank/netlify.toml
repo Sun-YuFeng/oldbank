@@ -3,9 +3,16 @@
   publish = "dist"
 
 [context.production.environment]
-  VITE_API_BASE_URL = "https://120.27.228.214:8080/silveragepass"
+  VITE_API_BASE_URL = "/api"
   VITE_APP_TITLE = "银龄通管理系统"
 
+# API代理重写 - 将/api请求转发到后端服务器
+[[redirects]]
+  from = "/api/*"
+  to = "http://120.27.228.214:8080/silveragepass/api/:splat"
+  status = 200
+
+# SPA路由支持
 [[redirects]]
   from = "/*"
   to = "/index.html"
