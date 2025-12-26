@@ -503,9 +503,37 @@ export const adjustUserPoints = (userId, amount, reason) => {
   })
 }
 
-// 获取公益池信息
+// 公益池管理API
+
+// 获取公益池统计信息
+export const getCharityPoolStats = () => {
+  return api.get('/api/admin/charity-pool/stats')
+}
+
+// 查询捐赠记录列表
+export const getCharityPoolDonations = (params = {}) => {
+  return api.get('/api/admin/charity-pool/donations', {
+    params
+  })
+}
+
+// 获取公益池基本信息
 export const getCharityPoolInfo = () => {
-  return api.get('/api/warm-coin-records/charity-pool/info')
+  return api.get('/api/admin/charity-pool/info')
+}
+
+// 获取公益池当前余额
+export const getCharityPoolBalance = () => {
+  return api.get('/api/admin/charity-pool/balance')
+}
+
+// 从公益池发放暖龄币
+export const distributeFromCharityPool = (targetUserId, amount, description = '') => {
+  return api.post('/api/admin/charity-pool/distribute', {
+    targetUserId,
+    amount,
+    description
+  })
 }
 
 export default api

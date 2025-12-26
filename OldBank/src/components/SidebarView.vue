@@ -36,6 +36,12 @@
           </router-link>
         </li>
         <li>
+          <router-link to="/video-manager" class="nav-item" active-class="active">
+            <i class="uil uil-video nav-icon"></i>
+            <span>视频管理</span>
+          </router-link>
+        </li>
+        <li>
           <router-link to="/account-management" class="nav-item" active-class="active">
             <i class="uil uil-user-circle nav-icon"></i>
             <span>账号管理</span>

@@ -11,16 +11,16 @@
         <div class="stat-value text-blue">{{ poolInfo.balance.toLocaleString() }}</div>
       </div>
       <div class="stat-card">
-        <span class="stat-label">累计捐赠总额</span>
-        <div class="stat-value text-green">{{ poolInfo.totalDonated.toLocaleString() }}</div>
+        <span class="stat-label">本季度累计捐赠</span>
+        <div class="stat-value text-green">{{ poolInfo.quarterlyDonation.toLocaleString() }}</div>
       </div>
       <div class="stat-card">
         <span class="stat-label">累计发放总额</span>
         <div class="stat-value">{{ poolInfo.totalDistributed.toLocaleString() }}</div>
       </div>
       <div class="stat-card">
-        <span class="stat-label">最后更新时间</span>
-        <div class="stat-value" style="font-size: 16px; color: #666;">{{ poolInfo.updateTime }}</div>
+        <span class="stat-label">最近捐赠时间</span>
+        <div class="stat-value" style="font-size: 16px; color: #666;">{{ poolInfo.lastDonationTime }}</div>
       </div>
     </div>
 
@@ -30,20 +30,14 @@
       <div class="filter-bar">
         <div class="input-group">
           <label>捐赠人：</label>
-          <input type="text" placeholder="输入姓名/ID" v-model="filters.donor">
+          <input type="text" placeholder="输入姓名/用户ID" v-model="filters.donor">
         </div>
         <div class="input-group">
-          <label>来源类型：</label>
-          <select v-model="filters.sourceType">
-            <option value="all">全部</option>
-            <option value="volunteer">志愿者主动捐赠</option>
-            <option value="heritage">老人遗产转化</option>
-          </select>
-        </div>
-        <div class="input-group">
-          <label>日期范围：</label>
+          <label>开始时间：</label>
           <input type="date" v-model="filters.startDate">
-          <span>-</span>
+        </div>
+        <div class="input-group">
+          <label>结束时间：</label>
           <input type="date" v-model="filters.endDate">
         </div>
         <div class="input-group" style="margin-left: auto;">
@@ -56,33 +50,23 @@
       <table>
         <thead>
           <tr>
-            <th>流水号</th>
+            <th>记录ID</th>
             <th>捐赠人信息</th>
-            <th>捐赠数量 (积分)</th>
-            <th>来源类型</th>
-            <th>所在社区</th>
+            <th>捐赠数量 (暖龄币)</th>
+            <th>用户地址</th>
             <th>捐赠时间</th>
-            <th>状态</th>
           </tr>
         </thead>
         <tbody>
-          <tr v-for="donation in donations" :key="donation.id">
-            <td>{{ donation.serialNumber }}</td>
+          <tr v-for="donation in donations" :key="donation.recordId">
+            <td>{{ donation.recordId }}</td>
             <td>
-              <div><strong>{{ donation.name }} ({{ donation.role }})</strong></div>
+              <div><strong>{{ donation.userName }}</strong></div>
               <div style="font-size: 12px; color:#999;">ID: {{ donation.userId }}</div>
             </td>
             <td style="font-weight: bold; color: #333;">+ {{ donation.amount.toLocaleString() }}</td>
-            <td>
-              <span class="tag" :class="getSourceTypeClass(donation.sourceType)">
-                {{ getSourceTypeLabel(donation.sourceType) }}
-              </span>
-            </td>
-            <td>{{ donation.community }}</td>
+            <td>{{ donation.address }}</td>
             <td>{{ donation.donationTime }}</td>
-            <td>
-              <span :style="{ color: getStatusColor(donation.status) }">● {{ getStatusLabel(donation.status) }}</span>
-            </td>
           </tr>
         </tbody>
       </table>
@@ -92,7 +76,7 @@
         <div class="page-item" @click="prevPage">&lt;</div>
         <div 
           class="page-item" 
-          :class="{ active: currentPage === page }"
+          :class="{ active: currentPage === page - 1 }"
           v-for="page in visiblePages" 
           :key="page"
           @click="goToPage(page)"
@@ -106,8 +90,11 @@
 </template>
 
 <script>
-import axios from 'axios'
-import { getCharityPoolInfo } from '@/utils/api'
+import { 
+  getCharityPoolStats, 
+  getCharityPoolDonations,
+  getCharityPoolInfo
+} from '@/utils/api'
 
 export default {
   name: 'PublicWelfarePoolPage',
@@ -115,92 +102,34 @@ export default {
     return {
       filters: {
         donor: '',
-        sourceType: 'all',
         startDate: '',
         endDate: ''
       },
-      currentPage: 1,
-      totalPages: 10,
+      currentPage: 0,
+      totalPages: 1,
       poolInfo: {
         balance: 0,
-        totalDonated: 0,
+        quarterlyDonation: 0,
         totalDistributed: 0,
-        updateTime: ''
+        lastDonationTime: ''
       },
-      donations: [
-        {
-          id: 1,
-          serialNumber: '#20231024001',
-          name: '张伟',
-          role: '志愿者',
-          userId: '882103',
-          amount: 50,
-          sourceType: 'volunteer',
-          community: '幸福街道阳光社区',
-          donationTime: '2025-12-7 14:30:22',
-          status: 'completed'
-        },
-        {
-          id: 2,
-          serialNumber: '#20231024002',
-          name: '李秀英',
-          role: '老人',
-          userId: '102934',
-          amount: 120,
-          sourceType: 'heritage',
-          heritagePercent: 20,
-          community: '和平路街道',
-          donationTime: '2025-12-7 09:15:00',
-          status: 'completed'
-        },
-        {
-          id: 3,
-          serialNumber: '#20231023055',
-          name: '王强',
-          role: '志愿者',
-          userId: '773412',
-          amount: 200,
-          sourceType: 'volunteer',
-          community: '滨湖社区',
-          donationTime: '2025-12-7 18:20:11',
-          status: 'completed'
-        },
-        {
-          id: 4,
-          serialNumber: '#20231023048',
-          name: '赵兰花',
-          role: '老人',
-          userId: '100221',
-          amount: 100,
-          sourceType: 'heritage',
-          heritagePercent: 10,
-          community: '花园路社区',
-          donationTime: '2025-12-7 16:05:33',
-          status: 'reviewing'
-        },
-        {
-          id: 5,
-          serialNumber: '#20231023041',
-          name: '刘浩',
-          role: '志愿者',
-          userId: '991203',
-          amount: 110,
-          sourceType: 'volunteer',
-          community: '阳光社区',
-          donationTime: '2025-12-7 10:12:45',
-          status: 'completed'
-        }
-      ]
+      donations: [],
+      currentPage: 0,
+      totalElements: 0,
+      totalPages: 1,
+      pageSize: 10
     }
   },
   async mounted() {
-    await this.loadPoolInfo()
+    await this.loadPoolStats()
+    await this.loadDonations()
   },
   computed: {
     visiblePages() {
       const pages = []
       const maxVisible = 5
-      let start = Math.max(1, this.currentPage - Math.floor(maxVisible / 2))
+      const currentPageDisplay = this.currentPage + 1
+      let start = Math.max(1, currentPageDisplay - Math.floor(maxVisible / 2))
       let end = Math.min(this.totalPages, start + maxVisible - 1)
       
       if (end - start + 1 < maxVisible) {
@@ -215,74 +144,92 @@ export default {
     }
   },
   methods: {
-    async loadPoolInfo() {
+    async loadPoolStats() {
       try {
-        const response = await getCharityPoolInfo()
+        const response = await getCharityPoolStats()
         if (response.code === 200) {
           this.poolInfo = response.data
-          console.log('公益池信息加载成功:', this.poolInfo)
+          console.log('公益池统计信息加载成功:', this.poolInfo)
         } else {
-          console.error('获取公益池信息失败:', response.message)
+          console.error('获取公益池统计信息失败:', response.message)
         }
       } catch (error) {
-        console.error('获取公益池信息出错:', error)
+        console.error('获取公益池统计信息出错:', error)
       }
     },
-    getSourceTypeClass(type) {
-      return {
-        'tag-blue': type === 'volunteer',
-        'tag-purple': type === 'heritage'
-      }[type] || 'tag-gray'
-    },
-    getSourceTypeLabel(type) {
-      const labels = {
-        'volunteer': '主动捐赠',
-        'heritage': '遗产转化'
+    
+    async loadDonations() {
+      try {
+        const params = this.buildSearchParams()
+        const response = await getCharityPoolDonations(params)
+        if (response.code === 200) {
+          this.donations = response.data.content
+          this.totalElements = response.data.totalElements
+          this.totalPages = response.data.totalPages
+          console.log('捐赠记录加载成功:', this.donations)
+        } else {
+          console.error('获取捐赠记录失败:', response.message)
+        }
+      } catch (error) {
+        console.error('获取捐赠记录出错:', error)
       }
-      const donation = this.donations.find(d => d.sourceType === type)
-      if (type === 'heritage' && donation && donation.heritagePercent) {
-        return `遗产转化 (${donation.heritagePercent}%)`
-      }
-      return labels[type] || type
     },
-    getStatusColor(status) {
-      const colors = {
-        'completed': '#52c41a',
-        'reviewing': '#999'
+    
+    buildSearchParams() {
+      const params = {
+        page: this.currentPage,
+        size: this.pageSize
       }
-      return colors[status] || '#999'
-    },
-    getStatusLabel(status) {
-      const labels = {
-        'completed': '已入池',
-        'reviewing': '审核中'
+      
+      if (this.filters.donor && this.filters.donor.trim()) {
+        params.keyword = this.filters.donor.trim()
       }
-      return labels[status] || status
+      
+      if (this.filters.startDate) {
+        params.startTime = this.formatDateTime(this.filters.startDate)
+      }
+      
+      if (this.filters.endDate) {
+        params.endTime = this.formatDateTime(this.filters.endDate)
+      }
+      
+      return params
     },
-    searchDonations() {
-      console.log('搜索条件:', this.filters)
-      // 这里添加搜索逻辑
+    
+    formatDateTime(dateString) {
+      if (!dateString) return ''
+      return dateString + ' 23:59:59'
+    },
+
+    async searchDonations() {
+      this.currentPage = 0
+      await this.loadDonations()
     },
     resetFilters() {
       this.filters = {
         donor: '',
-        sourceType: 'all',
         startDate: '',
         endDate: ''
       }
+      this.searchDonations()
     },
-    prevPage() {
-      if (this.currentPage > 1) {
+    async prevPage() {
+      if (this.currentPage > 0) {
         this.currentPage--
+        await this.loadDonations()
       }
     },
-    nextPage() {
-      if (this.currentPage < this.totalPages) {
+    
+    async nextPage() {
+      if (this.currentPage < this.totalPages - 1) {
         this.currentPage++
+        await this.loadDonations()
       }
     },
-    goToPage(page) {
-      this.currentPage = page
+    
+    async goToPage(page) {
+      this.currentPage = page - 1
+      await this.loadDonations()
     }
   }
 }

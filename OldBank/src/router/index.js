@@ -81,6 +81,13 @@ const router = createRouter({
       meta: { requiresAuth: true }
     },
     {
+      path: '/video-manager',
+      name: 'VideoManager',
+      // 懒加载视频管理页面
+      component: () => import('../views/VideoManager.vue'),
+      meta: { requiresAuth: true }
+    },
+    {
       path: '/volunteer/:id',
       name: 'VolunteerDetail',
       // 懒加载志愿者详情页面

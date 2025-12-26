@@ -6,8 +6,9 @@
 [[redirects]]
   # 匹配所有以 /api/ 开头的请求
   from = "/api/*"
-  # 重定向到您的后端服务器地址，:splat 会包含 * 匹配到的内容
-  to = "http://120.27.228.214:8080/silveragepass/api/:splat"
+  # 【修改这里】去掉中间的 '/api'。现在它将把 '/api/admin/auth/login'
+  # 代理到 'http://.../silveragepass/admin/auth/login'
+  to = "http://120.27.228.214:8080/silveragepass/:splat"
   # 状态码 200 表示这是一个代理（重写），而不是传统的重定向
   status = 200
 
